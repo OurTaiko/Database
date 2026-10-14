@@ -1,0 +1,12 @@
+# Renews the Let's Encrypt certificates of database.ourtaiko.org and
+# postgre-database.ourtaiko.org with the certbot container, then reloads the
+# panel's nginx if anything was renewed.
+[Unit]
+Description=Renew OurTaikoDatabase Let's Encrypt certificates
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker run --rm -v /etc/letsencrypt:/etc/letsencrypt -v /var/lib/letsencrypt:/var/lib/letsencrypt -v /www/wwwroot/acme:/www/wwwroot/acme certbot/certbot:v4.1.1 renew -n --deploy-hook "touch /etc/letsencrypt/.renewed"
+ExecStartPost=/bin/sh -c 'if [ -e /etc/letsencrypt/.renewed ]; then rm /etc/letsencrypt/.renewed && /www/server/nginx/sbin/nginx -t && /www/server/nginx/sbin/nginx -s reload; fi'
