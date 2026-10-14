@@ -4,8 +4,8 @@
 #   /opt/ourtaiko-database/src/frontend  the frontend repository
 #   /etc/ourtaiko-database/postgres.env  POSTGRES_PASSWORD (root-only)
 #   /etc/ourtaiko-database/api.env       see api.env.example (root-only)
-# The host's HTTPS proxy forwards database.ourtaiko.org to 127.0.0.1:8090 and
-# must overwrite X-Real-IP with the client address.
+# On sakura the web container on 127.0.0.1:8090 is reached through
+# nginx-upstream.conf; see OurTaikoLogs/OurTaikoDatabase/docs/DEPLOYMENT.md.
 name: ourtaiko-database
 services:
   postgres:
