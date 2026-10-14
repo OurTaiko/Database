@@ -1,0 +1,38 @@
+{
+  "name": "tja-renderer",
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jack9966qk/TJARenderer.git"
+  },
+  "description": "A high-level TJA chart renderer for the web.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "publishConfig": {
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "watch": "tsc --watch",
+    "test": "node --loader ts-node/esm tests/test-renderer.ts && node --loader ts-node/esm tests/test-auto-annotation.ts && node --loader ts-node/esm tests/test-pixel-snapping.ts"
+  },
+  "keywords": [
+    "tja",
+    "taiko",
+    "renderer",
+    "canvas"
+  ],
+  "author": "Jack",
+  "license": "MIT",
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0"
+  }
+}
