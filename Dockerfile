@@ -1,4 +1,5 @@
-FROM node:24-alpine AS build
+# The site is static, so it is built on the build machine's own platform.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 WORKDIR /src
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
