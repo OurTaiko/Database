@@ -1,0 +1,69 @@
+# OurTaikoDatabase on one Docker host: PostgreSQL, the API and the website.
+# Layout on the server:
+#   /opt/ourtaiko-database/src/backend   this repository
+#   /opt/ourtaiko-database/src/frontend  the frontend repository
+#   /etc/ourtaiko-database/postgres.env  POSTGRES_PASSWORD (root-only)
+#   /etc/ourtaiko-database/api.env       see api.env.example (root-only)
+# The host's HTTPS proxy forwards database.ourtaiko.org to 127.0.0.1:8090 and
+# must overwrite X-Real-IP with the client address.
+name: ourtaiko-database
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: ourtaiko-database-postgres
+    restart: unless-stopped
+    env_file:
+      - path: /etc/ourtaiko-database/postgres.env
+        format: raw
+    environment:
+      POSTGRES_DB: ourtaiko_database
+      POSTGRES_USER: ourtaiko_database
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+    volumes: ['postgres:/var/lib/postgresql']
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'ourtaiko_database', '-d', 'ourtaiko_database']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging: &logging
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  api:
+    image: ourtaiko-database-api:release
+    build: ..
+    container_name: ourtaiko-database-api
+    restart: unless-stopped
+    depends_on:
+      postgres: {condition: service_healthy}
+    env_file:
+      - path: /etc/ourtaiko-database/api.env
+        format: raw
+    environment:
+      LISTEN_ADDR: 0.0.0.0:8081
+      STORAGE_DIR: /tmp/staging
+      STORAGE_BACKEND: s3
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=1g']
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:8081/readyz']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    logging: *logging
+  web:
+    image: ourtaiko-database-web:release
+    build: ../../frontend
+    container_name: ourtaiko-database-web
+    restart: unless-stopped
+    depends_on:
+      api: {condition: service_healthy}
+    ports: ['127.0.0.1:8090:8080']
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=64m']
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+volumes:
+  postgres:
