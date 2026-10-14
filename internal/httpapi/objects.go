@@ -14,8 +14,9 @@ import (
 	"ourtaiko.dev/database/api/internal/objectstore"
 )
 
-// Matches a chart_resources row r that some chart still refers to.
-const referencedFile = `EXISTS(SELECT 1 FROM charts c WHERE c.tja_file=r.id OR c.audio_file=r.id OR c.cover_file=r.id OR c.preview_file=r.id)`
+// Matches a chart_resources row r that some chart or playlist still refers to.
+const referencedFile = `(EXISTS(SELECT 1 FROM charts c WHERE c.tja_file=r.id OR c.audio_file=r.id OR c.cover_file=r.id OR c.preview_file=r.id)
+ OR EXISTS(SELECT 1 FROM playlists p WHERE p.cover_file=r.id OR p.game_cover_file=r.id))`
 
 // fileExtension is the stored form: lowercase, without the dot.
 func fileExtension(name string) string {
@@ -98,7 +99,7 @@ func (s *Server) objectStored(ctx context.Context, key string, size int64) (bool
 }
 
 // releaseFiles deletes the given file records and their objects unless a
-// chart still refers to them. Each check runs under the object's key lock.
+// chart or playlist still refers to them. Each check runs under the object's key lock.
 func (s *Server) releaseFiles(ctx context.Context, ids []int64) error {
 	var failures []error
 	for _, id := range ids {

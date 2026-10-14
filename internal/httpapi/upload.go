@@ -377,7 +377,12 @@ func encodeCover(w http.ResponseWriter, r *http.Request, name string, data []byt
 
 // storeImage stores an encoded WebP cover and returns its file ID.
 func (s *Server) storeImage(ctx context.Context, tx pgx.Tx, data []byte) (int64, error) {
-	tmp, e := os.CreateTemp(s.Config.Storage, "cover-*.webp")
+	return s.storeImageAs(ctx, tx, data, "webp", "image/webp")
+}
+
+// storeImageAs stores image bytes as cover.{extension} and returns the file ID.
+func (s *Server) storeImageAs(ctx context.Context, tx pgx.Tx, data []byte, extension, media string) (int64, error) {
+	tmp, e := os.CreateTemp(s.Config.Storage, "cover-*."+extension)
 	if e != nil {
 		return 0, e
 	}
@@ -386,7 +391,7 @@ func (s *Server) storeImage(ctx context.Context, tx pgx.Tx, data []byte) (int64,
 	if e = errors.Join(e, tmp.Close()); e != nil {
 		return 0, e
 	}
-	return s.storeFile(ctx, tx, tmp.Name(), "cover.webp", "webp", "image/webp", hash(string(data)), int64(len(data)))
+	return s.storeFile(ctx, tx, tmp.Name(), "cover."+extension, extension, media, hash(string(data)), int64(len(data)))
 }
 
 // managed loads a published chart the signed-in user may edit.
@@ -415,38 +420,48 @@ func (s *Server) managed(w http.ResponseWriter, r *http.Request) (session, Chart
 	return u, c, true
 }
 
-func (s *Server) replaceCover(w http.ResponseWriter, r *http.Request) {
-	_, c, ok := s.managed(w, r)
-	if !ok {
-		return
-	}
+// receiveCover reads the single multipart file field "cover" and encodes it
+// as the stored WebP. It reports false after writing the error response.
+func receiveCover(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, cover.MaxBytes+64*1024)
 	mr, err := r.MultipartReader()
 	if err != nil {
 		problem(w, 400, "COVER_INVALID", "请选择封面文件")
-		return
+		return nil, false
 	}
 	part, err := mr.NextPart()
 	if err != nil {
 		uploadReadError(w, err)
-		return
+		return nil, false
 	}
 	disposition, params, err := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
 	name := params["filename"]
 	if err != nil || disposition != "form-data" || params["name"] != "cover" || !tja.SafeFilename(name) || !cover.ValidExtension(name) {
 		problem(w, 400, "COVER_INVALID", "只能上传一个 JPG、PNG 或 WebP 封面")
-		return
+		return nil, false
 	}
 	data, err := io.ReadAll(io.LimitReader(part, cover.MaxBytes+1))
 	if err != nil {
 		uploadReadError(w, err)
-		return
+		return nil, false
 	}
 	if len(data) > cover.MaxBytes {
 		problem(w, 413, "FILE_TOO_LARGE", "封面不能超过 8 MiB")
-		return
+		return nil, false
 	}
 	encoded, ok := encodeCover(w, r, name, data)
+	if !ok {
+		return nil, false
+	}
+	return encoded, true
+}
+
+func (s *Server) replaceCover(w http.ResponseWriter, r *http.Request) {
+	_, c, ok := s.managed(w, r)
+	if !ok {
+		return
+	}
+	encoded, ok := receiveCover(w, r)
 	if !ok {
 		return
 	}

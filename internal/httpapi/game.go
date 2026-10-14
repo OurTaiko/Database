@@ -83,9 +83,10 @@ func (s *Server) gameLogin(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, result)
 }
 
-// gameCatalog is the complete song list for a game client: the categories and
-// every published chart in at least one, read in one snapshot. It is the same
-// for everyone and ignores any session.
+// gameCatalog is the complete song list for a game client: the categories,
+// every published chart in at least one, and the system playlists, read in
+// one snapshot. It is the same for everyone and ignores any session; an
+// account's own playlists are GET /game/playlists.
 func (s *Server) gameCatalog(w http.ResponseWriter, r *http.Request) {
 	tx, err := s.DB.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
@@ -99,6 +100,11 @@ func (s *Server) gameCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	charts, err := readCharts(rows)
+	if err != nil {
+		internal(w, err)
+		return
+	}
+	playlists, err := systemGamePlaylists(r.Context(), tx)
 	if err != nil {
 		internal(w, err)
 		return
@@ -121,7 +127,7 @@ func (s *Server) gameCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 	s.chartNames(r.Context(), charts)
 	respond(w, 200, map[string]any{
-		"categories": categories, "charts": charts, "chartCount": len(charts), "playlists": []any{},
+		"categories": categories, "charts": charts, "chartCount": len(charts), "playlists": playlists, "playlistVersion": 1,
 		"chartSlotVersion": 1, "resourceDownloadVersion": 1, "scoreReplayVersion": 1,
 	})
 }
