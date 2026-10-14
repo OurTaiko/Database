@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"ourtaiko.dev/database/api/internal/objectstore"
 )
 
 // Matches a chart_resources row r that some chart still refers to.
@@ -53,7 +54,7 @@ func (s *Server) storeFile(ctx context.Context, tx pgx.Tx, path, name, extension
 		}
 		e = s.Config.Objects.Put(ctx, key, f, size, media, digest)
 		f.Close()
-		if e != nil {
+		if e != nil && !objectstore.AlreadyStored(e) {
 			return 0, e
 		}
 	}

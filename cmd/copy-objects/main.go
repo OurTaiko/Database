@@ -135,6 +135,10 @@ func main() {
 				}
 				err = objects.Put(ctx, r.key, f, r.size, media(r.extension), r.sha)
 				f.Close()
+				if objectstore.AlreadyStored(err) {
+					present.Add(1)
+					continue
+				}
 				if err != nil {
 					fail(fmt.Errorf("%s: %w", r.key, err))
 					continue

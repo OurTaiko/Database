@@ -9,3 +9,5 @@ test-results/
 .data/
 bin/
 *.log
+.env.*
+!.env.example

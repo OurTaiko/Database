@@ -380,7 +380,10 @@ func putObject(ctx context.Context, objects objectstore.Store, key, media, diges
 		defer f.Close()
 		body = f
 	}
-	return objects.Put(ctx, key, body, size, media, digest)
+	if err := objects.Put(ctx, key, body, size, media, digest); !objectstore.AlreadyStored(err) {
+		return err
+	}
+	return nil
 }
 
 func fileRecord(ctx context.Context, tx pgx.Tx, name, digest, extension string, size int64) (int64, error) {

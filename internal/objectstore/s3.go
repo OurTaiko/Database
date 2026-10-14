@@ -54,6 +54,13 @@ func (s *S3) Put(ctx context.Context, key string, body io.ReadSeeker, size int64
 	_, e = s.Client.PutObject(ctx, &s3.PutObjectInput{Bucket: aws.String(s.Bucket), Key: k, Body: body, ContentLength: aws.Int64(size), CacheControl: aws.String("public, max-age=31536000, immutable"), ContentType: aws.String(media), ChecksumSHA256: aws.String(base64.StdEncoding.EncodeToString(sum)), Metadata: map[string]string{"sha256": digest}, IfNoneMatch: aws.String("*")})
 	return e
 }
+
+// AlreadyStored reports a Put refused because the key already holds an
+// object. Keys are content-addressed, so the bytes are the same.
+func AlreadyStored(err error) bool {
+	var api smithy.APIError
+	return errors.As(err, &api) && api.ErrorCode() == "PreconditionFailed"
+}
 func (s *S3) Delete(ctx context.Context, key string) error {
 	k, e := s.key(key)
 	if e != nil {
@@ -70,7 +77,10 @@ func (s *S3) Open(ctx context.Context, key string) (Object, error) {
 	h, e := s.Client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(s.Bucket), Key: k})
 	if e != nil {
 		var api smithy.APIError
-		if errors.As(e, &api) && (api.ErrorCode() == "NotFound" || api.ErrorCode() == "NoSuchKey") {
+		// Without s3:ListBucket on the key's prefix, S3 answers a missing key
+		// with 403. Puts refuse to overwrite, so treating it as missing can
+		// never replace an object; a real permission problem fails the Put.
+		if errors.As(e, &api) && (api.ErrorCode() == "NotFound" || api.ErrorCode() == "NoSuchKey" || api.ErrorCode() == "Forbidden") {
 			return nil, os.ErrNotExist
 		}
 		return nil, e
