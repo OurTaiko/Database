@@ -155,6 +155,8 @@ func (s *Server) Handler() http.Handler {
 				return
 			}
 		}
+		w, finish := gzipJSON(w, r)
+		defer finish()
 		defer func() {
 			if e := recover(); e != nil {
 				log.Printf("panic: %v", e)
