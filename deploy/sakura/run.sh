@@ -9,7 +9,7 @@
 # Private configuration (root-only):
 #   /etc/ourtaiko-database/postgres.env   POSTGRES_PASSWORD
 #   /etc/ourtaiko-database/api.env        see ../api.env.example
-# CloudBeaver keeps its workspace in /opt/ourtaiko-database/cloudbeaver.
+#   /etc/ourtaiko-database/postgres-tls/  server.crt, server.key, pg_hba.conf (owner uid 70)
 set -euo pipefail
 net=ourtaiko-database
 conf=/etc/ourtaiko-database
@@ -27,6 +27,11 @@ wait_healthy() {
   return 1
 }
 
+# Published on 5432 for remote database tools. pg_hba.conf (see
+# pg_hba.conf.example) admits outside connections only over TLS, only for the
+# viewer and editor roles and only from listed addresses (the cloud security
+# group must allow them too); the owner role works
+# inside the Docker network alone. The TLS key pair is self-signed.
 postgres() {
   docker rm -f ourtaiko-database-postgres >/dev/null 2>&1 || true
   docker run -d --name ourtaiko-database-postgres --network "$net" --network-alias postgres \
@@ -35,8 +40,12 @@ postgres() {
     -e POSTGRES_DB=ourtaiko_database -e POSTGRES_USER=ourtaiko_database \
     -e POSTGRES_INITDB_ARGS='--encoding=UTF8 --locale=C.UTF-8' \
     -v ourtaiko-database-postgres:/var/lib/postgresql \
+    -v "$conf/postgres-tls:/etc/postgresql/tls:ro" \
+    -p 5432:5432 \
     --health-cmd 'pg_isready -U ourtaiko_database -d ourtaiko_database' --health-interval 5s --health-retries 20 \
-    postgres:18-alpine >/dev/null
+    postgres:18-alpine \
+    -c ssl=on -c ssl_cert_file=/etc/postgresql/tls/server.crt -c ssl_key_file=/etc/postgresql/tls/server.key \
+    -c hba_file=/etc/postgresql/tls/pg_hba.conf -c password_encryption=scram-sha-256 >/dev/null
   wait_healthy ourtaiko-database-postgres
 }
 
@@ -65,30 +74,11 @@ web() {
   wait_healthy ourtaiko-database-web
 }
 
-# The first visit runs CloudBeaver's setup wizard, which creates the
-# administrator. Finish it before the public site is reachable.
-cloudbeaver() {
-  docker rm -f ourtaiko-database-cloudbeaver >/dev/null 2>&1 || true
-  docker run -d --name ourtaiko-database-cloudbeaver --network "$net" \
-    --restart unless-stopped "${log[@]}" \
-    -p 127.0.0.1:8978:8978 \
-    -v /opt/ourtaiko-database/cloudbeaver:/opt/cloudbeaver/workspace \
-    -e JAVA_OPTS='-Xms128m -Xmx512m' \
-    -e CB_SERVER_NAME='OurTaiko Database' \
-    -e CB_SERVER_URL=https://postgre-database.ourtaiko.org \
-    -e CLOUDBEAVER_APP_FORWARD_PROXY=true \
-    -e CLOUDBEAVER_APP_SUPPORTS_CUSTOM_CONNECTIONS=false \
-    -e CLOUDBEAVER_APP_GRANT_CONNECTIONS_ACCESS_TO_ANONYMOUS_TEAM=false \
-    -e CLOUDBEAVER_APP_ANONYMOUS_ACCESS_ENABLED=false \
-    -e CLOUDBEAVER_CORE_LOCALIZATION=zh \
-    ourtaiko-database-cloudbeaver:pinned >/dev/null
-}
-
 services=("$@")
-[ ${#services[@]} -gt 0 ] || services=(postgres api web cloudbeaver)
+[ ${#services[@]} -gt 0 ] || services=(postgres api web)
 for s in "${services[@]}"; do
   case "$s" in
-    postgres|api|web|cloudbeaver) "$s"; echo "$s: running" ;;
+    postgres|api|web) "$s"; echo "$s: running" ;;
     *) echo "unknown service $s" >&2; exit 1 ;;
   esac
 done

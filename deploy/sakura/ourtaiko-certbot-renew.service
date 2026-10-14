@@ -1,6 +1,5 @@
-# Renews the Let's Encrypt certificates of database.ourtaiko.org and
-# postgre-database.ourtaiko.org with the certbot container, then reloads the
-# panel's nginx if anything was renewed.
+# Renews the Let's Encrypt certificate of database.ourtaiko.org with the
+# certbot container, then reloads the panel's nginx if it was renewed.
 [Unit]
 Description=Renew OurTaikoDatabase Let's Encrypt certificates
 After=docker.service network-online.target

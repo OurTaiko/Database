@@ -1,0 +1,13 @@
+# /etc/ourtaiko-database/postgres-tls/pg_hba.conf on sakura (owner uid 70).
+# First match wins.
+# Inside the container: health checks and maintenance with docker exec.
+local     all                all                                       trust
+host      all                all                    127.0.0.1/32       trust
+# Containers on the ourtaiko-database Docker network (API, CloudBeaver).
+host      ourtaiko_database  all                    samenet            scram-sha-256
+# Remote database tools: TLS only, viewer and editor only, listed addresses only.
+# 154.64.230.124 is ourtaiko-prod (its CloudBeaver at postgre.ourtaiko.org).
+hostssl   ourtaiko_database  ourtaiko_database_viewer,ourtaiko_database_editor  154.64.230.124/32  scram-sha-256
+# Everything else is refused.
+host      all                all                    0.0.0.0/0          reject
+host      all                all                    ::/0               reject
