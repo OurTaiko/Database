@@ -150,6 +150,26 @@ func (s *Server) chartNames(ctx context.Context, charts []Chart) {
 
 const pageSize = 24
 
+// keywordClause matches a chart whose title, subtitle, any translation,
+// official ID or any block's maker contains the keyword q; number is
+// keywordNumber(q). An empty keyword matches every chart.
+func keywordClause(q, number string) string {
+	return `(` + q + `='' OR c.title ILIKE '%'||` + q + `||'%' OR c.subtitle ILIKE '%'||` + q + `||'%' OR c.official_id ILIKE '%'||` + q + `||'%'
+ OR c.nijiiro_id=` + number + ` OR c.id=` + number + `
+ OR EXISTS(SELECT 1 FROM chart_difficulties dm WHERE dm.chart_id=c.id AND dm.maker ILIKE '%'||` + q + `||'%')
+ OR EXISTS(SELECT 1 FROM jsonb_each_text(c.title_translations) t WHERE t.value ILIKE '%'||` + q + `||'%')
+ OR EXISTS(SELECT 1 FROM jsonb_each_text(c.subtitle_translations) t WHERE t.value ILIKE '%'||` + q + `||'%'))`
+}
+
+// keywordNumber lets a number also find the chart with that Nijiiro ID or
+// database ID; -1 matches none.
+func keywordNumber(q string) int64 {
+	if n, e := strconv.ParseInt(q, 10, 64); e == nil && n > 0 {
+		return n
+	}
+	return -1
+}
+
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	uploader := r.URL.Query().Get("uploader")
 	if uploader != "" && !validSubject(uploader) {
@@ -231,16 +251,8 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, uploader string)
 		problem(w, 400, "QUERY_INVALID", "顺序必须为 default / nijiiro / title / bpm / level / updated")
 		return
 	}
-	// A number also finds the chart with that Nijiiro ID or database ID.
-	number := int64(-1)
-	if n, e := strconv.ParseInt(q, 10, 64); e == nil && n > 0 {
-		number = n
-	}
-	where := ` WHERE ` + publishedChart + ` AND ($1='' OR c.title ILIKE '%'||$1||'%' OR c.subtitle ILIKE '%'||$1||'%' OR c.official_id ILIKE '%'||$1||'%'
- OR c.nijiiro_id=$7 OR c.id=$7
- OR EXISTS(SELECT 1 FROM chart_difficulties dm WHERE dm.chart_id=c.id AND dm.maker ILIKE '%'||$1||'%')
- OR EXISTS(SELECT 1 FROM jsonb_each_text(c.title_translations) t WHERE t.value ILIKE '%'||$1||'%')
- OR EXISTS(SELECT 1 FROM jsonb_each_text(c.subtitle_translations) t WHERE t.value ILIKE '%'||$1||'%'))
+	number := keywordNumber(q)
+	where := ` WHERE ` + publishedChart + ` AND ` + keywordClause("$1", "$7") + `
  AND ($2='' OR c.uploader_id=$2)
  AND ($3::int=0 OR (c.category_flags & $3::int)<>0)
  AND (($4='' AND $5::int=0) OR EXISTS(SELECT 1 FROM chart_difficulties d

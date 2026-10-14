@@ -86,6 +86,9 @@ func devUser(id string) User {
 }
 
 func (s *Server) current(r *http.Request) (session, error) {
+	if isGameRequest(r) {
+		return s.gameSession(r)
+	}
 	v, e := s.localSession(r)
 	if e != nil {
 		return v, e
@@ -117,6 +120,29 @@ func (s *Server) current(r *http.Request) (session, error) {
 	e = s.DB.QueryRow(r.Context(), `SELECT permission_flags FROM users WHERE id=$1`, v.User.ID).Scan(&v.User.PermissionFlags)
 	v.User.CanUpload = v.User.PermissionFlags&PermissionUpload != 0
 	return v, e
+}
+
+// gameSession authenticates a native client by its SSO game token. Browser
+// cookies never make a game session, nor a game token a website session.
+func (s *Server) gameSession(r *http.Request) (session, error) {
+	var v session
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok || len(token) != 64 {
+		return v, pgx.ErrNoRows
+	}
+	if s.Config.SSO == nil {
+		if s.Config.DevUserID == "" || token != s.devGameToken() {
+			return v, pgx.ErrNoRows
+		}
+		v.User = devUser(s.Config.DevUserID)
+	} else {
+		u, e := s.Config.SSO.identity(r.Context(), "game", token)
+		if e != nil {
+			return v, e
+		}
+		v.User = u
+	}
+	return v, recordUserActivity(r.Context(), s.DB, v.User.ID, false)
 }
 func (s *Server) required(w http.ResponseWriter, r *http.Request, csrf bool) (session, bool) {
 	v, e := s.current(r)

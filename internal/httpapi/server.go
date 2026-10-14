@@ -117,12 +117,20 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/charts/{id}/tja", s.downloadTJA)
 	mux.HandleFunc("GET /api/v1/charts/{id}/audio", s.streamAudio)
 	mux.HandleFunc("GET /api/v1/charts/{id}/download", s.downloadPackage)
+	mux.HandleFunc("GET /api/v1/charts/{id}/resources", s.resourceLinks)
+	mux.HandleFunc("POST /api/v1/game/login", s.gameLogin)
+	mux.HandleFunc("GET /api/v1/game/catalog", s.gameCatalog)
+	mux.HandleFunc("GET /api/v1/game/search", s.gameSearch)
+	mux.HandleFunc("GET /api/v1/game/scores", s.gameScoreList)
+	mux.HandleFunc("POST /api/v1/game/scores", s.submitScore)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Request-ID", ID())
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		if r.Method != "GET" && r.Method != "HEAD" && r.Header.Get("Origin") != s.Config.Origin {
+		// Native game requests come without an Origin; a browser always sends one.
+		game := strings.HasPrefix(r.URL.Path, "/api/v1/game/")
+		if r.Method != "GET" && r.Method != "HEAD" && ((game && r.Header.Get("Origin") != "") || (!game && r.Header.Get("Origin") != s.Config.Origin)) {
 			problem(w, 403, "ORIGIN_INVALID", "请求来源无效，请从本站页面操作")
 			return
 		}
