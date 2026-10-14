@@ -13,6 +13,7 @@ import { UploadPage } from './upload'
 import { NotificationProvider } from './notifications'
 import { CategoryProvider } from './categories'
 import { ProfilePage } from './profile'
+import { MyPlaylistsPage, PlaylistPage, PlaylistsPage } from './playlists'
 import './styles.css'
 import { ThemeProvider } from './theme'
 function App() {
@@ -34,6 +35,9 @@ function App() {
                         <Route path="me/charts" element={<Library mine />} />
                         <Route path="upload" element={<UploadPage />} />
                         <Route path="charts/:id" element={<Detail />} />
+                        <Route path="playlists" element={<PlaylistsPage />} />
+                        <Route path="playlists/:id" element={<PlaylistPage />} />
+                        <Route path="me/playlists" element={<MyPlaylistsPage />} />
                         <Route path="login" element={<Auth key="login" />} />
                         <Route path="register" element={<Auth key="register" register />} />
                         <Route

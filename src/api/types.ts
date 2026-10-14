@@ -42,3 +42,34 @@ export type Chart = Metadata & {
   subtitleTranslations: Partial<Record<Locale, string>>
 }
 export type ChartList = { items: Chart[]; total: number; page: number; pageSize: number }
+
+/** A playlist's ID is a decimal number, or a word for a system playlist, which
+ * the server computes: no owner, read-only. */
+export type Playlist = {
+  id: string
+  name: string
+  description: string
+  public: boolean
+  system: boolean
+  categoryId: string
+  genre: string
+  ownerId?: string
+  owner: { id: string; nickname: string; avatarUrl?: string } | null
+  coverHash?: string
+  chartCount: number
+  favoriteCount: number
+  favorited: boolean
+  createdAt: string | null
+  updatedAt: string | null
+  /** Only in the viewer's own list when it asks about one chart. */
+  containsChart?: boolean
+  /** Only in the detail response, in playlist order. */
+  charts?: Chart[]
+}
+export type PlaylistPage = { items: Playlist[]; total: number; page: number; pageSize: number }
+export type MyPlaylists = {
+  owned: Playlist[]
+  favorites: Playlist[]
+  maxPlaylists: number
+  maxItems: number
+}

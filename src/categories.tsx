@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
+import { ChoiceSelect } from '@/components/choice-select'
 import { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from './api/client'
@@ -123,5 +124,31 @@ export function CategoryPicker({
         </div>
       )}
     </fieldset>
+  )
+}
+
+export function CategorySelect({
+  label,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  label: string
+  value: string
+  onChange: (id: string) => void
+  disabled?: boolean
+}) {
+  const { items } = useContext(CategoryContext)
+  return (
+    <ChoiceSelect
+      label={label}
+      value={value}
+      onValueChange={onChange}
+      disabled={disabled || !items}
+      items={(items ?? []).map((category) => ({
+        value: category.id,
+        label: categoryName(category),
+      }))}
+    />
   )
 }

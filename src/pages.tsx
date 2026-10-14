@@ -19,8 +19,10 @@ import {
   DownloadSimpleIcon as Download,
   ArrowSquareOutIcon,
   CaretRightIcon,
+  PlaylistIcon,
 } from '@phosphor-icons/react'
 import { api, jsonRequest } from './api/client'
+import { AddToPlaylistDialog } from './playlist-dialogs'
 import type { Chart, ChartList } from './api/types'
 import { ChartCard, formatDuration } from '@/components/chart-card'
 import { supportsChart } from './courses'
@@ -271,6 +273,7 @@ export function Detail() {
     [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [coverEditing, setCoverEditing] = useState(false)
+  const [collecting, setCollecting] = useState(false)
   const editButton = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     const controller = new AbortController()
@@ -387,6 +390,18 @@ export function Detail() {
               <ArrowSquareOutIcon size={17} aria-hidden="true" />
               TJA
             </a>
+            {session.user && (
+              <Button
+                variant="secondary"
+                size="lg"
+                className="h-11"
+                aria-label={t('playlists.addToPlaylist')}
+                onClick={() => setCollecting(true)}
+              >
+                <PlaylistIcon size={17} aria-hidden="true" />
+                <span className="max-sm:hidden">{t('playlists.addToPlaylist')}</span>
+              </Button>
+            )}
           </div>
         </div>
         <AudioPlayer
@@ -399,6 +414,9 @@ export function Detail() {
         />
       </section>
       {error && <Notice>{error}</Notice>}
+      {collecting && session.user && (
+        <AddToPlaylistDialog chart={chart} onDismiss={() => setCollecting(false)} />
+      )}
       {editing && canManage && (
         <EditMetadata
           key={chart.id}

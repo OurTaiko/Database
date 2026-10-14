@@ -8,6 +8,7 @@ import {
   SignInIcon,
   UserIcon as UserRound,
   ListIcon as Menu,
+  PlaylistIcon,
 } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Notice } from '@/notifications'
@@ -32,6 +33,7 @@ export function Layout() {
   // The upload entry exists only for users holding the upload permission.
   const links = [
     { to: '/', label: t('db.browse'), icon: Compass },
+    { to: '/playlists', label: t('playlists.plaza'), icon: PlaylistIcon },
     ...(session.user?.canUpload
       ? [
           { to: '/upload', label: t('db.upload'), icon: Upload },
