@@ -38,10 +38,14 @@ export function uploadChart(
   key: string,
   signal: AbortSignal,
   onProgress: (n: number) => void,
+  replaceChartId?: number,
 ): Promise<Chart> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', endpoints.charts)
+    xhr.open(
+      replaceChartId ? 'PUT' : 'POST',
+      replaceChartId ? endpoints.chartFiles(replaceChartId) : endpoints.charts,
+    )
     xhr.withCredentials = true
     xhr.setRequestHeader('X-CSRF-Token', csrf)
     xhr.setRequestHeader('Idempotency-Key', key)
@@ -52,7 +56,7 @@ export function uploadChart(
       try {
         const data = JSON.parse(xhr.responseText)
         if (xhr.status >= 200 && xhr.status < 300) resolve(data)
-        else reject(new Error(apiErrorMessage(data)))
+        else reject(new Error(apiErrorMessage(data), { cause: data }))
       } catch {
         reject(
           new Error(

@@ -534,6 +534,15 @@ export function Detail() {
               </h2>
               <ul className="divide-y">
                 <li>
+                  <Link className={manageItemClassName} to={`/charts/${chart.id}/edit`}>
+                    {t('editor.open')}
+                    <CaretRightIcon
+                      className="size-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  </Link>
+                </li>
+                <li>
                   <button
                     ref={editButton}
                     type="button"

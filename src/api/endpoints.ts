@@ -35,6 +35,7 @@ export const endpoints = {
       Object.fromEntries(Object.entries(query).filter(([, value]) => value !== '')),
     ),
   chart: chartPath,
+  chartFiles: (id: number | string) => `${chartPath(id)}/files`,
   cover: (id: number, hash?: string) =>
     withQuery(`${chartPath(id)}/cover`, hash ? { v: hash } : {}),
   resource: (chart: Pick<Chart, 'id'>, kind: 'audio' | 'tja' | 'download') =>
