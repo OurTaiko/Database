@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -77,6 +78,99 @@ func identifiers(nijiiro, official string) (*int32, *string, bool) {
 	return nijiiroID, officialID, true
 }
 
+// Text fields a chart submission may carry besides its files.
+var uploadFields = []string{"encoding", "description", "categoryIds", "nijiiroId", "officialId"}
+
+// receiveUploadForm stages the multipart files tja, audio and cover of a
+// submission in dir and collects the text fields named in allowed. On a bad
+// request it has answered and returns false.
+func receiveUploadForm(w http.ResponseWriter, r *http.Request, dir string, allowed []string) (map[string]*stagedFile, map[string]string, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, 112*1024*1024)
+	mr, e := r.MultipartReader()
+	if e != nil {
+		problem(w, 400, "UPLOAD_FILES_INVALID", "请选择 TJA 和 OGG 或 MP3 音频文件")
+		return nil, nil, false
+	}
+	files := map[string]*stagedFile{}
+	fields := map[string]string{}
+	for {
+		part, e := mr.NextPart()
+		if e == io.EOF {
+			break
+		}
+		if e != nil {
+			uploadReadError(w, e)
+			return nil, nil, false
+		}
+		disposition, params, e := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
+		if e != nil || disposition != "form-data" {
+			problem(w, 400, "UPLOAD_FILES_INVALID", "上传字段格式错误")
+			return nil, nil, false
+		}
+		field, name := params["name"], params["filename"]
+		switch {
+		case field == "tja" || field == "audio" || field == "cover":
+			validExtension := strings.EqualFold(filepath.Ext(name), ".tja")
+			maxBytes := int64(tja.MaxTJA)
+			if field == "audio" {
+				validExtension = audio.MediaType(name) != ""
+				maxBytes = tja.MaxAudio
+			}
+			if field == "cover" {
+				validExtension = cover.ValidExtension(name)
+				maxBytes = cover.MaxBytes
+			}
+			if files[field] != nil || !tja.SafeFilename(name) || !validExtension {
+				problem(w, 400, "UPLOAD_FILES_INVALID", "文件类型、数量或文件名无效；封面仅支持 JPG / PNG / WebP，文件名不能包含路径")
+				return nil, nil, false
+			}
+			f := &stagedFile{name: name, path: filepath.Join(dir, field)}
+			out, e := os.OpenFile(f.path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			if e != nil {
+				internal(w, e)
+				return nil, nil, false
+			}
+			h := sha256.New()
+			n, copyErr := io.Copy(io.MultiWriter(out, h), io.LimitReader(part, maxBytes+1))
+			closeErr := out.Close()
+			if copyErr != nil {
+				uploadReadError(w, copyErr)
+				return nil, nil, false
+			}
+			if closeErr != nil {
+				internal(w, closeErr)
+				return nil, nil, false
+			}
+			if n == 0 || n > maxBytes {
+				problem(w, 413, "FILE_TOO_LARGE", "文件为空或超过上传大小限制")
+				return nil, nil, false
+			}
+			f.size, f.sha = n, hex.EncodeToString(h.Sum(nil))
+			files[field] = f
+		case slices.Contains(allowed, field):
+			if _, exists := fields[field]; exists || name != "" {
+				problem(w, 400, "UPLOAD_FILES_INVALID", "上传字段重复或格式错误")
+				return nil, nil, false
+			}
+			data, e := io.ReadAll(io.LimitReader(part, 4001))
+			if e != nil {
+				uploadReadError(w, e)
+				return nil, nil, false
+			}
+			if len(data) > 4000 {
+				problem(w, 400, "DESCRIPTION_TOO_LONG", "说明不能超过 4000 字节")
+				return nil, nil, false
+			}
+			fields[field] = string(data)
+		default:
+			problem(w, 400, "UPLOAD_FILES_INVALID", "包含不支持的上传字段")
+			return nil, nil, false
+		}
+		part.Close()
+	}
+	return files, fields, true
+}
+
 // upload publishes a new chart from a TJA, its audio and an optional cover.
 // Everything is validated before any object is written.
 func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
@@ -96,94 +190,15 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		problem(w, 503, "UPLOAD_BUSY", "当前正在处理其他上传，请稍后重试")
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 112*1024*1024)
-	mr, e := r.MultipartReader()
-	if e != nil {
-		problem(w, 400, "UPLOAD_FILES_INVALID", "请选择 TJA 和 OGG 或 MP3 音频文件")
-		return
-	}
 	dir, e := os.MkdirTemp(s.Config.Storage, "staging-")
 	if e != nil {
 		internal(w, e)
 		return
 	}
 	defer os.RemoveAll(dir)
-	files := map[string]*stagedFile{}
-	fields := map[string]string{}
-	for {
-		part, e := mr.NextPart()
-		if e == io.EOF {
-			break
-		}
-		if e != nil {
-			uploadReadError(w, e)
-			return
-		}
-		disposition, params, e := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
-		if e != nil || disposition != "form-data" {
-			problem(w, 400, "UPLOAD_FILES_INVALID", "上传字段格式错误")
-			return
-		}
-		field, name := params["name"], params["filename"]
-		switch field {
-		case "tja", "audio", "cover":
-			validExtension := strings.EqualFold(filepath.Ext(name), ".tja")
-			maxBytes := int64(tja.MaxTJA)
-			if field == "audio" {
-				validExtension = audio.MediaType(name) != ""
-				maxBytes = tja.MaxAudio
-			}
-			if field == "cover" {
-				validExtension = cover.ValidExtension(name)
-				maxBytes = cover.MaxBytes
-			}
-			if files[field] != nil || !tja.SafeFilename(name) || !validExtension {
-				problem(w, 400, "UPLOAD_FILES_INVALID", "文件类型、数量或文件名无效；封面仅支持 JPG / PNG / WebP，文件名不能包含路径")
-				return
-			}
-			f := &stagedFile{name: name, path: filepath.Join(dir, field)}
-			out, e := os.OpenFile(f.path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-			if e != nil {
-				internal(w, e)
-				return
-			}
-			h := sha256.New()
-			n, copyErr := io.Copy(io.MultiWriter(out, h), io.LimitReader(part, maxBytes+1))
-			closeErr := out.Close()
-			if copyErr != nil {
-				uploadReadError(w, copyErr)
-				return
-			}
-			if closeErr != nil {
-				internal(w, closeErr)
-				return
-			}
-			if n == 0 || n > maxBytes {
-				problem(w, 413, "FILE_TOO_LARGE", "文件为空或超过上传大小限制")
-				return
-			}
-			f.size, f.sha = n, hex.EncodeToString(h.Sum(nil))
-			files[field] = f
-		case "encoding", "description", "categoryIds", "nijiiroId", "officialId":
-			if _, exists := fields[field]; exists || name != "" {
-				problem(w, 400, "UPLOAD_FILES_INVALID", "上传字段重复或格式错误")
-				return
-			}
-			data, e := io.ReadAll(io.LimitReader(part, 4001))
-			if e != nil {
-				uploadReadError(w, e)
-				return
-			}
-			if len(data) > 4000 {
-				problem(w, 400, "DESCRIPTION_TOO_LONG", "说明不能超过 4000 字节")
-				return
-			}
-			fields[field] = string(data)
-		default:
-			problem(w, 400, "UPLOAD_FILES_INVALID", "包含不支持的上传字段")
-			return
-		}
-		part.Close()
+	files, fields, ok := receiveUploadForm(w, r, dir, uploadFields)
+	if !ok {
+		return
 	}
 	categoryIDs, e := categorySelection(json.RawMessage(fields["categoryIds"]))
 	if e != nil {

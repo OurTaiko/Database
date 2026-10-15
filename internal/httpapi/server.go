@@ -114,6 +114,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/charts/{id}", s.remove)
 	mux.HandleFunc("GET /api/v1/charts/{id}/cover", s.getCover)
 	mux.HandleFunc("PUT /api/v1/charts/{id}/cover", s.replaceCover)
+	mux.HandleFunc("PUT /api/v1/charts/{id}/files", s.replaceFiles)
 	mux.HandleFunc("GET /api/v1/charts/{id}/tja", s.downloadTJA)
 	mux.HandleFunc("GET /api/v1/charts/{id}/audio", s.streamAudio)
 	mux.HandleFunc("GET /api/v1/charts/{id}/download", s.downloadPackage)
