@@ -1,12 +1,13 @@
 import { i18n } from '@/i18n'
 import { useTranslation } from 'react-i18next'
 import { endpoints } from '@/api/endpoints'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import {
   FileAudioIcon as FileMusic,
   GitBranchIcon,
+  PlayIcon,
   StarIcon,
   ArrowCounterClockwiseIcon as RotateCcw,
 } from '@phosphor-icons/react'
@@ -17,6 +18,7 @@ import { defaultDifficulty } from './chart-difficulty'
 import { maxTja } from './tja'
 
 const ChartPreview = lazy(() => import('./chart-preview'))
+const EmbeddedPlayer = lazy(() => import('./embedded-player'))
 
 const difficultyTabColors = {
   Easy: '[--difficulty-bg:var(--color-orange-100)] [--difficulty-fg:var(--color-orange-800)] dark:[--difficulty-bg:#493128] dark:[--difficulty-fg:#f7bb78]',
@@ -34,10 +36,14 @@ const tabButtonClassName =
 const difficultyTabClassName =
   'bg-transparent text-[color-mix(in_oklab,var(--difficulty-fg)_65%,transparent)] hover:bg-transparent hover:text-[var(--difficulty-fg)] focus-visible:ring-[var(--difficulty-fg)] data-active:hover:bg-[var(--difficulty-bg)] data-active:bg-[var(--difficulty-bg)] data-active:text-[var(--difficulty-fg)] dark:bg-transparent dark:text-[color-mix(in_oklab,var(--difficulty-fg)_65%,transparent)] dark:hover:bg-transparent dark:hover:text-[var(--difficulty-fg)] dark:data-active:hover:bg-[var(--difficulty-bg)] dark:data-active:bg-[var(--difficulty-bg)] dark:data-active:text-[var(--difficulty-fg)]'
 
-// The chart image of one block. A course may have a single, a 1P and a 2P
-// chart: one tab per course, then a side switch. `course` is the block's key.
+export type ActivityTab = 'image' | 'preview'
+
+// The chart image of one block, or the embedded player playing it. A course
+// may have a single, a 1P and a 2P chart: one tab per course, then a side
+// switch. `course` is the block's key.
 export function ChartActivity({ chart }: { chart: Chart }) {
   const { t } = useTranslation()
+  const [tab, setTab] = useState<ActivityTab>('image')
   const [course, setCourse] = useState(() => defaultDifficulty(chart.difficulties))
   const [source, setSource] = useState('')
   const [error, setError] = useState('')
@@ -74,16 +80,24 @@ export function ChartActivity({ chart }: { chart: Chart }) {
   const status =
     'flex min-h-40 flex-col items-center justify-center gap-3 py-6 text-center text-sm text-muted-foreground'
   return (
-    <section
-      className="flex min-w-0 flex-col gap-5 rounded-2xl bg-white p-5 shadow-[0_4px_12px_rgba(0,0,0,0.08)] sm:p-6 dark:bg-card"
-      aria-label={t('messages.chartImage')}
+    <Tabs
+      value={tab}
+      onValueChange={(value) => setTab(value as ActivityTab)}
+      className="min-w-0 gap-5 rounded-2xl bg-white p-5 shadow-[0_4px_12px_rgba(0,0,0,0.08)] sm:p-6 dark:bg-card"
+      aria-label={t('messages.chartSections')}
       data-testid="chart-activity"
     >
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <FileMusic size={18} aria-hidden="true" />
-          {t('messages.chartImage')}
-        </h2>
+        <TabsList aria-label={t('messages.songDetails')} className={tabButtonGroupClassName}>
+          <TabsTrigger value="image" className={tabButtonClassName}>
+            <FileMusic size={18} aria-hidden="true" />
+            {t('messages.chartImage')}
+          </TabsTrigger>
+          <TabsTrigger value="preview" className={tabButtonClassName}>
+            <PlayIcon size={18} aria-hidden="true" />
+            {t('messages.chartPreview')}
+          </TabsTrigger>
+        </TabsList>
         <div className="-mx-1 flex min-w-0 max-w-full items-center gap-3 overflow-x-auto px-1 py-1">
           <Tabs
             value={group?.base ?? ''}
@@ -162,17 +176,36 @@ export function ChartActivity({ chart }: { chart: Chart }) {
             {t('messages.loadingTjaFromServer')}
           </p>
         ) : (
-          <Suspense
-            fallback={
-              <p className={status} role="status">
-                {t('messages.loadingChartPreview')}
-              </p>
-            }
-          >
-            <ChartPreview key={course} chart={chart} source={source} course={course} />
-          </Suspense>
+          <>
+            <TabsContent value="image">
+              {tab === 'image' && (
+                <Suspense
+                  fallback={
+                    <p className={status} role="status">
+                      {t('messages.loadingChartPreview')}
+                    </p>
+                  }
+                >
+                  <ChartPreview key={course} chart={chart} source={source} course={course} />
+                </Suspense>
+              )}
+            </TabsContent>
+            <TabsContent value="preview">
+              {tab === 'preview' && (
+                <Suspense
+                  fallback={
+                    <p className={status} role="status">
+                      {t('messages.loadingChartPreview')}
+                    </p>
+                  }
+                >
+                  <EmbeddedPlayer chart={chart} source={source} course={course} />
+                </Suspense>
+              )}
+            </TabsContent>
+          </>
         )}
       </div>
-    </section>
+    </Tabs>
   )
 }
