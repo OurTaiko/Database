@@ -84,7 +84,7 @@ func (s *Server) gameLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // gameCatalog is the complete song list for a game client: the categories,
-// every published chart in at least one, and the system playlists, read in
+// every published chart with files in at least one, and the system playlists, read in
 // one snapshot. It is the same for everyone and ignores any session; an
 // account's own playlists are GET /game/playlists.
 func (s *Server) gameCatalog(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +94,7 @@ func (s *Server) gameCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-	rows, err := tx.Query(r.Context(), chartSelect+` WHERE `+publishedChart+` AND c.category_flags<>0 ORDER BY c.created_at DESC,c.id DESC`)
+	rows, err := tx.Query(r.Context(), chartSelect+` WHERE `+playableChart+` AND c.category_flags<>0 ORDER BY c.created_at DESC,c.id DESC`)
 	if err != nil {
 		internal(w, err)
 		return
@@ -177,7 +177,7 @@ func (s *Server) gameSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	const matching = `SELECT 1 FROM chart_difficulties d WHERE d.chart_id=c.id AND ($3='' OR d.course=$3) AND ($4::int=-1 OR d.level=$4)`
-	rows, e := s.DB.Query(r.Context(), chartSelect+` WHERE `+publishedChart+` AND c.category_flags<>0 AND `+keywordClause("$1", "$2")+` AND EXISTS(`+matching+`)
+	rows, e := s.DB.Query(r.Context(), chartSelect+` WHERE `+playableChart+` AND c.category_flags<>0 AND `+keywordClause("$1", "$2")+` AND EXISTS(`+matching+`)
 	 ORDER BY ($5::text<>'' AND EXISTS(`+matching+`
 	 AND NOT EXISTS(SELECT 1 FROM scores sc WHERE sc.user_id=$5 AND sc.difficulty_id=d.id
 	 AND (sc.is_latest OR NOT EXISTS(SELECT 1 FROM scores cur WHERE cur.user_id=$5 AND cur.difficulty_id=d.id AND cur.is_latest))
@@ -221,6 +221,10 @@ func (s *Server) resourceLinks(w http.ResponseWriter, r *http.Request) {
 	}
 	if e != nil {
 		internal(w, e)
+		return
+	}
+	if !c.HasFiles {
+		problem(w, 404, "CHART_FILES_MISSING", "该乐曲尚未上传谱面文件")
 		return
 	}
 	link := func(key, route, digest, media string, size int64) (resourceLink, error) {

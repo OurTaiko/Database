@@ -113,6 +113,10 @@ func (s *Server) downloadPackage(w http.ResponseWriter, r *http.Request) {
 		internal(w, e)
 		return
 	}
+	if !c.HasFiles {
+		problem(w, 404, "CHART_FILES_MISSING", "该乐曲尚未上传谱面文件")
+		return
+	}
 	tf, e := s.Config.Objects.Open(r.Context(), c.TJAKey)
 	if e != nil {
 		internal(w, e)

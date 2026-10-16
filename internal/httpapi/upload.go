@@ -78,8 +78,10 @@ func identifiers(nijiiro, official string) (*int32, *string, bool) {
 	return nijiiroID, officialID, true
 }
 
-// Text fields a chart submission may carry besides its files.
-var uploadFields = []string{"encoding", "description", "categoryIds", "nijiiroId", "officialId"}
+// Text fields a chart submission may carry besides its files. title,
+// subtitle and bpm describe a song registered without files (R038); with a
+// TJA they are ignored, as the file is the source of those.
+var uploadFields = []string{"encoding", "description", "categoryIds", "nijiiroId", "officialId", "title", "subtitle", "bpm"}
 
 // receiveUploadForm stages the multipart files tja, audio and cover of a
 // submission in dir and collects the text fields named in allowed. On a bad
@@ -172,7 +174,8 @@ func receiveUploadForm(w http.ResponseWriter, r *http.Request, dir string, allow
 }
 
 // upload publishes a new chart from a TJA, its audio and an optional cover.
-// Everything is validated before any object is written.
+// Everything is validated before any object is written. A form with neither
+// a TJA nor an audio registers a song without files (createSong).
 func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	u, ok := s.uploader(w, r)
 	if !ok {
@@ -217,8 +220,12 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tf, af, cf := files["tja"], files["audio"], files["cover"]
+	if tf == nil && af == nil {
+		s.createSong(w, r, u, key, fields, cf, categoryIDs, flags, nijiiroID, officialID)
+		return
+	}
 	if tf == nil || af == nil {
-		problem(w, 400, "UPLOAD_FILES_INVALID", "必须同时选择 TJA 和一个 OGG 或 MP3 音频")
+		problem(w, 400, "UPLOAD_FILES_INVALID", "必须同时选择 TJA 和一个 OGG 或 MP3 音频，或两者都不选以仅登记乐曲")
 		return
 	}
 	invalid := func(issue *tja.Issue) {
@@ -517,6 +524,12 @@ func (s *Server) replaceCover(w http.ResponseWriter, r *http.Request) {
 }
 
 type metadataPatch struct {
+	// Title, Subtitle and BPM are the TJA's for a chart with files and can be
+	// changed only on a song registered without them (R038); null BPM means
+	// unknown.
+	Title       json.RawMessage `json:"title"`
+	Subtitle    json.RawMessage `json:"subtitle"`
+	BPM         json.RawMessage `json:"bpm"`
 	Description json.RawMessage `json:"description"`
 	CategoryIDs json.RawMessage `json:"categoryIds"`
 	// null clears an identifier.
@@ -565,7 +578,8 @@ func patchTranslations(raw json.RawMessage, dst map[string]string) bool {
 }
 
 // editMetadata changes the database's own description of a chart; the stored
-// TJA and audio are untouched. Omitted fields keep their value.
+// TJA and audio are untouched. Omitted fields keep their value. The title,
+// subtitle and BPM of a song without files are the database's own too.
 func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 	_, c, ok := s.managed(w, r)
 	if !ok {
@@ -576,6 +590,38 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	isNull := func(raw json.RawMessage) bool { return bytes.Equal(bytes.TrimSpace(raw), []byte("null")) }
+	title, subtitle, bpm := c.Title, c.Subtitle, c.BPM
+	if len(patch.Title) > 0 || len(patch.Subtitle) > 0 || len(patch.BPM) > 0 {
+		if c.HasFiles {
+			problem(w, 422, "METADATA_LOCKED", "有谱面文件时，曲名、副标题和 BPM 来自 TJA，不能在此修改")
+			return
+		}
+		if len(patch.Title) > 0 {
+			if json.Unmarshal(patch.Title, &title) != nil || isNull(patch.Title) {
+				problem(w, 422, "METADATA_INVALID", "曲名必须为文本")
+				return
+			}
+			title = strings.TrimSpace(title)
+		}
+		if len(patch.Subtitle) > 0 {
+			if json.Unmarshal(patch.Subtitle, &subtitle) != nil || isNull(patch.Subtitle) {
+				problem(w, 422, "METADATA_INVALID", "副标题必须为文本")
+				return
+			}
+			subtitle = strings.TrimSpace(subtitle)
+		}
+		if title == "" || !validDisplayText(title) || !validDisplayText(subtitle) {
+			problem(w, 422, "METADATA_INVALID", "曲名不能为空；曲名和副标题不能超过 500 字节或包含控制字符")
+			return
+		}
+		if len(patch.BPM) > 0 {
+			bpm = 0
+			if !isNull(patch.BPM) && (json.Unmarshal(patch.BPM, &bpm) != nil || bpm <= 0 || !validBPM(bpm)) {
+				problem(w, 422, "METADATA_INVALID", "BPM 必须为正数或 null")
+				return
+			}
+		}
+	}
 	description := c.Description
 	if len(patch.Description) > 0 {
 		if json.Unmarshal(patch.Description, &description) != nil || isNull(patch.Description) || !validDescription(description) {
@@ -624,8 +670,8 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 	titles, _ := json.Marshal(c.TitleTranslations)
 	subtitles, _ := json.Marshal(c.SubtitleTranslations)
 	// update_at is refreshed by the charts trigger only when something changed.
-	tag, e := s.DB.Exec(r.Context(), `UPDATE charts c SET description=$2,category_flags=$3,nijiiro_id=$4,official_id=$5,title_translations=$6,subtitle_translations=$7 WHERE c.id=$1 AND `+publishedChart,
-		c.ID, description, flags, nijiiroID, officialID, titles, subtitles)
+	tag, e := s.DB.Exec(r.Context(), `UPDATE charts c SET description=$2,category_flags=$3,nijiiro_id=$4,official_id=$5,title_translations=$6,subtitle_translations=$7,title=$8,subtitle=$9,bpm=$10 WHERE c.id=$1 AND `+publishedChart,
+		c.ID, description, flags, nijiiroID, officialID, titles, subtitles, title, subtitle, bpm)
 	if e != nil {
 		internal(w, e)
 		return

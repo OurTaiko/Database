@@ -37,21 +37,27 @@ type Chart struct {
 	AudioHash         string    `json:"audioHash"`
 	AudioSize         int64     `json:"audioSize"`
 	CoverHash         string    `json:"coverHash,omitempty"`
-	TJAKey            string    `json:"-"`
-	AudioKey          string    `json:"-"`
-	CoverKey          string    `json:"-"`
+	// HasFiles is false for a song registered without a TJA and audio (R038):
+	// it has no blocks, no duration, and the file fields are empty.
+	HasFiles bool   `json:"hasFiles"`
+	TJAKey   string `json:"-"`
+	AudioKey string `json:"-"`
+	CoverKey string `json:"-"`
 	tja.Metadata
 }
 
 const publishedChart = `c.status='published'`
 
+// playableChart is a published chart with files: what the game can play.
+const playableChart = publishedChart + ` AND c.tja_file IS NOT NULL`
+
 const chartSelect = `SELECT c.id,c.nijiiro_id,c.official_id,c.uploader_id,c.description,c.created_at,c.update_at,c.duration,c.demo_end,c.category_flags,
- tf.original_filename,af.original_filename,tf.sha256,tf.byte_size,af.sha256,af.byte_size,tf.storage_key,af.storage_key,COALESCE(cf.sha256,''),COALESCE(cf.storage_key,''),
- c.title,c.subtitle,c.bpm,c.offset_seconds,c.demo_start,af.sha256||'.'||af.extension,c.title_translations,c.subtitle_translations,
+ COALESCE(tf.original_filename,''),COALESCE(af.original_filename,''),COALESCE(tf.sha256,''),COALESCE(tf.byte_size,0),COALESCE(af.sha256,''),COALESCE(af.byte_size,0),COALESCE(tf.storage_key,''),COALESCE(af.storage_key,''),COALESCE(cf.sha256,''),COALESCE(cf.storage_key,''),
+ c.title,c.subtitle,c.bpm,c.offset_seconds,c.demo_start,COALESCE(af.sha256||'.'||af.extension,''),c.title_translations,c.subtitle_translations,
  (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',d.id,'course',d.course,'side',d.side,'level',d.level,'maker',d.maker,'branching',d.branching)
    ORDER BY array_position(ARRAY['Easy','Normal','Hard','Oni','Edit'],d.course),array_position(ARRAY['single','p1','p2'],d.side)),'[]'::jsonb)
    FROM chart_difficulties d WHERE d.chart_id=c.id)
- FROM charts c JOIN chart_resources tf ON tf.id=c.tja_file JOIN chart_resources af ON af.id=c.audio_file LEFT JOIN chart_resources cf ON cf.id=c.cover_file `
+ FROM charts c LEFT JOIN chart_resources tf ON tf.id=c.tja_file LEFT JOIN chart_resources af ON af.id=c.audio_file LEFT JOIN chart_resources cf ON cf.id=c.cover_file `
 
 func readChart(row pgx.Row) (Chart, error) {
 	var c Chart
@@ -61,6 +67,7 @@ func readChart(row pgx.Row) (Chart, error) {
 		&c.TJAName, &c.AudioName, &c.TJAHash, &c.TJASize, &c.AudioHash, &c.AudioSize, &c.TJAKey, &c.AudioKey, &c.CoverHash, &c.CoverKey,
 		&c.Title, &c.Subtitle, &c.BPM, &c.Offset, &c.DemoStart, &c.Wave, &c.TitleTranslations, &c.SubtitleTranslations, &difficulties)
 	if e == nil {
+		c.HasFiles = c.TJAKey != ""
 		c.CategoryIDs = flags.IDs()
 		e = json.Unmarshal(difficulties, &c.Difficulties)
 		c.Maker = difficultyMakers(c.Difficulties)
@@ -187,8 +194,8 @@ func (s *Server) mine(w http.ResponseWriter, r *http.Request) {
 }
 
 // search pages the chart list. Filters: keyword, uploader, category, a
-// course and star level that must hold for the same block (any side), and
-// whether the chart has a Nijiiro ID.
+// course and star level that must hold for the same block (any side),
+// whether the chart has a Nijiiro ID, and whether it has files.
 func (s *Server) search(w http.ResponseWriter, r *http.Request, uploader string) {
 	query := r.URL.Query()
 	q := strings.TrimSpace(query.Get("q"))
@@ -232,6 +239,11 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, uploader string)
 		problem(w, 400, "QUERY_INVALID", "nijiiro 必须为 yes / no")
 		return
 	}
+	files := query.Get("files")
+	if files != "" && files != "yes" && files != "no" {
+		problem(w, 400, "QUERY_INVALID", "files 必须为 yes / no")
+		return
+	}
 	// The star level a level sort ranks by: the filtered course's, else the hardest.
 	const stars = `(SELECT max(d.level) FROM chart_difficulties d WHERE d.chart_id=c.id AND ($4='' OR d.course=$4))`
 	ordering := ` ORDER BY c.created_at DESC,c.id DESC`
@@ -257,14 +269,15 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, uploader string)
  AND ($3::int=0 OR (c.category_flags & $3::int)<>0)
  AND (($4='' AND $5::int=0) OR EXISTS(SELECT 1 FROM chart_difficulties d
    WHERE d.chart_id=c.id AND ($4='' OR d.course=$4) AND ($5::int=0 OR d.level=$5)))
- AND ($6='' OR (c.nijiiro_id IS NOT NULL)=($6='yes'))`
-	args := []any{q, uploader, int(flag), course, level, mapped, number}
+ AND ($6='' OR (c.nijiiro_id IS NOT NULL)=($6='yes'))
+ AND ($8='' OR (c.tja_file IS NOT NULL)=($8='yes'))`
+	args := []any{q, uploader, int(flag), course, level, mapped, number, files}
 	var total int
 	if e := s.DB.QueryRow(r.Context(), `SELECT count(*) FROM charts c`+where, args...).Scan(&total); e != nil {
 		internal(w, e)
 		return
 	}
-	rows, e := s.DB.Query(r.Context(), chartSelect+where+ordering+` LIMIT $8 OFFSET $9`, append(args, pageSize, (page-1)*pageSize)...)
+	rows, e := s.DB.Query(r.Context(), chartSelect+where+ordering+` LIMIT $9 OFFSET $10`, append(args, pageSize, (page-1)*pageSize)...)
 	if e != nil {
 		internal(w, e)
 		return

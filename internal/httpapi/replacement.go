@@ -24,6 +24,8 @@ var replacementFields = append(append([]string{}, uploadFields...), "confirmRese
 // PUT /charts/{id}/files. The audio is kept when none is sent. Blocks the new
 // TJA no longer has go with their scores; scores of the remaining blocks stay
 // and stop being the latest when a file changed (trigger charts_retire_scores).
+// A song registered without files (R038) gets its first TJA and audio here;
+// both are then required, and there is nothing to confirm.
 func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 	u, c, ok := s.managed(w, r)
 	if !ok {
@@ -52,11 +54,15 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tf, af, cf := files["tja"], files["audio"], files["cover"]
-	if tf == nil {
-		problem(w, 400, "UPLOAD_FILES_INVALID", "必须选择新的 TJA，音频可沿用当前文件")
+	if tf == nil || (!c.HasFiles && af == nil) {
+		if c.HasFiles {
+			problem(w, 400, "UPLOAD_FILES_INVALID", "必须选择新的 TJA，音频可沿用当前文件")
+		} else {
+			problem(w, 400, "UPLOAD_FILES_INVALID", "该乐曲尚无文件，必须同时选择 TJA 和一个 OGG 或 MP3 音频")
+		}
 		return
 	}
-	if fields["confirmReset"] != "true" {
+	if c.HasFiles && fields["confirmReset"] != "true" {
 		problem(w, 400, "REPLACEMENT_CONFIRMATION_REQUIRED", "替换需要确认：消失的谱面块连同成绩删除，其余旧成绩不再计入最新版本")
 		return
 	}
@@ -205,8 +211,7 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Serialize with other replacements, deletion and score submissions.
-	var previousTJA, previousAudio int64
-	var previousCover *int64
+	var previousTJA, previousAudio, previousCover *int64
 	e = tx.QueryRow(ctx, `SELECT tja_file,audio_file,cover_file FROM charts c WHERE c.id=$1 AND `+publishedChart+` FOR UPDATE`, c.ID).Scan(&previousTJA, &previousAudio, &previousCover)
 	if errors.Is(e, pgx.ErrNoRows) {
 		problem(w, 404, "CHART_NOT_FOUND", "谱面不存在或已删除")
@@ -221,12 +226,18 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 		internal(w, e)
 		return
 	}
-	audioFile := previousAudio
+	var audioFile int64
 	if af != nil {
 		if audioFile, e = s.storeFile(ctx, tx, af.path, af.name, audioExtension, audio.MediaType(af.name), af.sha, af.size); e != nil {
 			internal(w, e)
 			return
 		}
+	} else if previousAudio != nil {
+		audioFile = *previousAudio
+	} else {
+		// The chart lost its files between the read and the lock.
+		problem(w, 409, "CHART_FILES_CHANGED", "该乐曲的文件已变化，请重新打开谱面页面")
+		return
 	}
 	coverFile := previousCover
 	if coverData != nil {
@@ -257,11 +268,11 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	// Shared files stay while another chart or playlist refers to them.
 	var retired []int64
-	if tjaFile != previousTJA {
-		retired = append(retired, previousTJA)
+	if previousTJA != nil && tjaFile != *previousTJA {
+		retired = append(retired, *previousTJA)
 	}
-	if audioFile != previousAudio {
-		retired = append(retired, previousAudio)
+	if previousAudio != nil && audioFile != *previousAudio {
+		retired = append(retired, *previousAudio)
 	}
 	if previousCover != nil && (coverFile == nil || *coverFile != *previousCover) {
 		retired = append(retired, *previousCover)

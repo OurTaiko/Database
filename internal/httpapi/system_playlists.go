@@ -20,7 +20,7 @@ type systemPlaylist struct {
 
 // Only charts of the game catalog are listed, so the website and the game show
 // the same charts.
-const systemChart = publishedChart + ` AND c.category_flags<>0`
+const systemChart = playableChart + ` AND c.category_flags<>0`
 
 // Names are English like the category titles; the website translates them by ID.
 var systemPlaylists = []systemPlaylist{
