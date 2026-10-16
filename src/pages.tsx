@@ -19,7 +19,9 @@ import {
   DownloadSimpleIcon as Download,
   ArrowSquareOutIcon,
   CaretRightIcon,
+  FileDashedIcon,
   PlaylistIcon,
+  UploadSimpleIcon,
 } from '@phosphor-icons/react'
 import { api, jsonRequest } from './api/client'
 import { AddToPlaylistDialog } from './playlist-dialogs'
@@ -28,6 +30,7 @@ import { ChartCard, formatDuration } from '@/components/chart-card'
 import { supportsChart } from './courses'
 import { useSession } from './session-context'
 import { EditMetadata } from './edit-metadata'
+import { UploadFilesDialog } from './upload-files-dialog'
 import { ChartActivity } from './chart-activity'
 import { Modal, Notice } from './notifications'
 import { useNotification } from './notification-context'
@@ -75,8 +78,9 @@ export function Library({ mine = false }: { mine?: boolean }) {
       : '',
     level: Number.isInteger(level) && level >= 1 && level <= 10 ? String(level) : '',
     nijiiro: ['yes', 'no'].includes(params.get('nijiiro') || '') ? params.get('nijiiro')! : '',
+    files: ['yes', 'no'].includes(params.get('files') || '') ? params.get('files')! : '',
   }
-  const { order, category, course, nijiiro } = filters
+  const { order, category, course, nijiiro, files } = filters
   const stars = filters.level
   useEffect(() => {
     if (mine && !user) return
@@ -84,7 +88,7 @@ export function Library({ mine = false }: { mine?: boolean }) {
     setLoading(true)
     setError('')
     api<ChartList>(
-      endpoints.chartList({ q, page, order, category, course, level: stars, nijiiro }, mine),
+      endpoints.chartList({ q, page, order, category, course, level: stars, nijiiro, files }, mine),
       { signal: controller.signal },
     )
       .then((result) => {
@@ -97,7 +101,7 @@ export function Library({ mine = false }: { mine?: boolean }) {
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [mine, user, q, page, order, category, course, stars, nijiiro])
+  }, [mine, user, q, page, order, category, course, stars, nijiiro, files])
   if (mine && !user)
     return (
       <div className={emptyStateClassName}>
@@ -121,7 +125,7 @@ export function Library({ mine = false }: { mine?: boolean }) {
       }
       return next
     })
-  const filtered = !!(q || category || course || stars || nijiiro)
+  const filtered = !!(q || category || course || stars || nijiiro || files)
   return (
     <>
       <div className="[&_p]:mt-2 [&_p]:text-sm [&_p]:text-muted-foreground">
@@ -273,6 +277,7 @@ export function Detail() {
     [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [coverEditing, setCoverEditing] = useState(false)
+  const [filesUploading, setFilesUploading] = useState(false)
   const [collecting, setCollecting] = useState(false)
   const editButton = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -281,6 +286,7 @@ export function Detail() {
     setError('')
     setEditing(false)
     setCoverEditing(false)
+    setFilesUploading(false)
     setConfirm(false)
     if (!id) return
     api<Chart>(endpoints.chart(id), { signal: controller.signal })
@@ -313,8 +319,7 @@ export function Detail() {
     ) : (
       <p className="text-sm text-muted-foreground">{t('messages.loadingChart')}</p>
     )
-  if (!supportsChart(chart.difficulties))
-    return <Notice>{t('messages.thisChartTypeIsNotSupported')}</Notice>
+  if (!supportsChart(chart)) return <Notice>{t('messages.thisChartTypeIsNotSupported')}</Notice>
   const text = chartText(chart, i18n.resolvedLanguage)
   // The API decides; this only hides controls that would be refused.
   const canManage =
@@ -366,30 +371,45 @@ export function Detail() {
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">BPM</dt>
-              <dd className="text-base font-semibold tabular-nums sm:text-xl">{chart.bpm}</dd>
+              <dd className="text-base font-semibold tabular-nums sm:text-xl">
+                {chart.bpm > 0 ? chart.bpm : '—'}
+              </dd>
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">{t('messages.duration')}</dt>
               <dd className="text-base font-semibold tabular-nums sm:text-xl">
-                {formatDuration(chart.duration)}
+                {chart.hasFiles ? formatDuration(chart.duration) : '—'}
               </dd>
             </div>
           </dl>
           <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1 sm:col-start-2 sm:gap-3">
-            <a
-              className={cn(buttonVariants({ size: 'lg' }), 'h-11 flex-1 px-5 sm:flex-none')}
-              href={endpoints.resource(chart, 'download')}
-            >
-              <Download size={18} aria-hidden="true" />
-              {t('messages.downloadChartPackage')}
-            </a>
-            <a
-              className={cn(buttonVariants({ variant: 'secondary', size: 'lg' }), 'h-11')}
-              href={endpoints.resource(chart, 'tja')}
-            >
-              <ArrowSquareOutIcon size={17} aria-hidden="true" />
-              TJA
-            </a>
+            {chart.hasFiles ? (
+              <>
+                <a
+                  className={cn(buttonVariants({ size: 'lg' }), 'h-11 flex-1 px-5 sm:flex-none')}
+                  href={endpoints.resource(chart, 'download')}
+                >
+                  <Download size={18} aria-hidden="true" />
+                  {t('messages.downloadChartPackage')}
+                </a>
+                <a
+                  className={cn(buttonVariants({ variant: 'secondary', size: 'lg' }), 'h-11')}
+                  href={endpoints.resource(chart, 'tja')}
+                >
+                  <ArrowSquareOutIcon size={17} aria-hidden="true" />
+                  TJA
+                </a>
+              </>
+            ) : canManage ? (
+              <Button
+                size="lg"
+                className="h-11 flex-1 px-5 sm:flex-none"
+                onClick={() => setFilesUploading(true)}
+              >
+                <UploadSimpleIcon size={18} aria-hidden="true" />
+                {t('db.uploadChartFiles')}
+              </Button>
+            ) : null}
             {session.user && (
               <Button
                 variant="secondary"
@@ -404,14 +424,24 @@ export function Detail() {
             )}
           </div>
         </div>
-        <AudioPlayer
-          compact
-          className="rounded-none border-0 border-t bg-[#fbfbfd] px-4 py-3 sm:px-8 dark:bg-muted/40"
-          label={t('messages.audioPreview')}
-          src={endpoints.resource(chart, 'audio')}
-          startAt={chart.demoStart}
-          knownDuration={chart.duration}
-        />
+        {chart.hasFiles ? (
+          <AudioPlayer
+            compact
+            className="rounded-none border-0 border-t bg-[#fbfbfd] px-4 py-3 sm:px-8 dark:bg-muted/40"
+            label={t('messages.audioPreview')}
+            src={endpoints.resource(chart, 'audio')}
+            startAt={chart.demoStart}
+            knownDuration={chart.duration}
+          />
+        ) : (
+          <p
+            role="status"
+            className="flex items-center gap-2 border-t bg-[#fbfbfd] px-4 py-3 text-sm text-muted-foreground sm:px-8 dark:bg-muted/40"
+          >
+            <FileDashedIcon size={18} aria-hidden="true" />
+            {t('db.noFilesText')}
+          </p>
+        )}
       </section>
       {error && <Notice>{error}</Notice>}
       {collecting && session.user && (
@@ -430,6 +460,17 @@ export function Detail() {
           }}
         />
       )}
+      {filesUploading && canManage && (
+        <UploadFilesDialog
+          key={chart.id}
+          chart={chart}
+          onDismiss={() => setFilesUploading(false)}
+          onSaved={(updated) => {
+            setChart(updated)
+            notify(t('messages.chartFilesUploaded'), 'success')
+          }}
+        />
+      )}
       {coverEditing && canManage && (
         <CoverDialog
           chart={chart}
@@ -441,7 +482,29 @@ export function Detail() {
       )}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0">
-          <ChartActivity key={`${chart.id}:${chart.tjaHash}`} chart={chart} />
+          {chart.hasFiles ? (
+            <ChartActivity key={`${chart.id}:${chart.tjaHash}`} chart={chart} />
+          ) : (
+            <section
+              className={cn(
+                detailCardClassName,
+                'flex flex-col items-center gap-3 py-12 text-center',
+              )}
+              aria-label={t('messages.chartImage')}
+            >
+              <FileDashedIcon size={32} className="text-muted-foreground" aria-hidden="true" />
+              <h2 className="text-lg font-semibold tracking-tight">{t('db.noFiles')}</h2>
+              <p className="max-w-md text-sm text-muted-foreground">
+                {canManage ? t('db.noFilesManagerText') : t('db.noFilesText')}
+              </p>
+              {canManage && (
+                <Button variant="outline" onClick={() => setFilesUploading(true)}>
+                  <UploadSimpleIcon size={16} aria-hidden="true" />
+                  {t('db.uploadChartFiles')}
+                </Button>
+              )}
+            </section>
+          )}
         </div>
         <aside className="flex min-w-0 flex-col gap-6">
           <section
@@ -485,12 +548,14 @@ export function Detail() {
             <h2 id="chart-files-heading" className="text-lg font-semibold tracking-tight">
               {t('db.files')}
             </h2>
+            {!chart.hasFiles && <p className="text-sm text-muted-foreground">{t('db.noFiles')}</p>}
             <dl className="space-y-3 text-sm [&_dt]:text-muted-foreground">
-              {(
-                [
-                  ['TJA', chart.tjaName, chart.tjaHash, chart.tjaSize, 'tja'],
-                  [t('db.audio'), chart.audioName, chart.audioHash, chart.audioSize, 'audio'],
-                ] as const
+              {(chart.hasFiles
+                ? ([
+                    ['TJA', chart.tjaName, chart.tjaHash, chart.tjaSize, 'tja'],
+                    [t('db.audio'), chart.audioName, chart.audioHash, chart.audioSize, 'audio'],
+                  ] as const)
+                : []
               ).map(([label, name, hash, size, kind]) => (
                 <div key={kind} className="space-y-1">
                   <dt>
@@ -533,15 +598,31 @@ export function Detail() {
                 {t('messages.manageChart')}
               </h2>
               <ul className="divide-y">
-                <li>
-                  <Link className={manageItemClassName} to={`/charts/${chart.id}/edit`}>
-                    {t('editor.open')}
-                    <CaretRightIcon
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  </Link>
-                </li>
+                {chart.hasFiles ? (
+                  <li>
+                    <Link className={manageItemClassName} to={`/charts/${chart.id}/edit`}>
+                      {t('editor.open')}
+                      <CaretRightIcon
+                        className="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                    </Link>
+                  </li>
+                ) : (
+                  <li>
+                    <button
+                      type="button"
+                      className={manageItemClassName}
+                      onClick={() => setFilesUploading(true)}
+                    >
+                      {t('db.uploadChartFiles')}
+                      <CaretRightIcon
+                        className="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </li>
+                )}
                 <li>
                   <button
                     ref={editButton}

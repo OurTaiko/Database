@@ -25,8 +25,12 @@ describe('detail difficulty selection', () => {
     expect(defaultDifficulty([])).toBe('')
     expect(defaultDifficulty([{ course: 'Tower', side: 'single', level: 5, maker: '' }])).toBe('')
     expect(Object.keys(courseNames)).toHaveLength(5)
-    expect(supportsChart([{ course: 'Oni' }, { course: 'Dan' }])).toBe(false)
-    expect(supportsChart([{ course: 'Oni' }, { course: 'Edit' }])).toBe(true)
+    expect(supportsChart({ difficulties: [{ course: 'Oni' }, { course: 'Dan' }] })).toBe(false)
+    expect(supportsChart({ difficulties: [{ course: 'Oni' }, { course: 'Edit' }] })).toBe(true)
+    // A song registered without files has no blocks yet; a chart with files must.
+    expect(supportsChart({ difficulties: [], hasFiles: false })).toBe(true)
+    expect(supportsChart({ difficulties: [], hasFiles: true })).toBe(false)
+    expect(supportsChart({ difficulties: [{ course: 'Dan' }], hasFiles: false })).toBe(false)
   })
   it('names blocks as the preview parser does and prefers the single chart', () => {
     const p1: Difficulty = { course: 'Oni', side: 'p1', level: 9, maker: '' }

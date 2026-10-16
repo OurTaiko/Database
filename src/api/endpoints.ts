@@ -18,6 +18,7 @@ export type ChartQuery = {
   course?: string
   level?: string
   nijiiro?: string
+  files?: string
 }
 
 export const endpoints = {

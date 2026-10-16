@@ -9,7 +9,7 @@ import { supportsChart } from '@/courses'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { DifficultyBadges } from '@/components/difficulty-badges'
-import { GitBranchIcon, UsersIcon } from '@phosphor-icons/react'
+import { FileDashedIcon, GitBranchIcon, UsersIcon } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 import { CardCoverBackdrop, coveredTextClassName, useCardCover } from '@/components/card-cover'
 
@@ -20,7 +20,7 @@ export function ChartCard({ chart }: { chart: Chart }) {
   const { t } = useTranslation()
   const cover = useCardCover(coverSource(chart))
   const hasCover = !!cover.source
-  if (!supportsChart(chart.difficulties)) return null
+  if (!supportsChart(chart)) return null
   const text = chartText(chart, i18n.resolvedLanguage)
   return (
     <Link
@@ -53,16 +53,27 @@ export function ChartCard({ chart }: { chart: Chart }) {
             {/* Two rows of facts at most; a third row is cut off whole. */}
             <div className="max-h-[3.25rem] overflow-hidden">
               <CategoryLabels ids={chart.categoryIds}>
-                <li>
-                  <Badge variant="outline" className="tabular-nums">
-                    {chart.bpm} BPM
-                  </Badge>
-                </li>
-                <li>
-                  <Badge variant="outline" className="tabular-nums">
-                    {formatDuration(chart.duration)}
-                  </Badge>
-                </li>
+                {chart.bpm > 0 && (
+                  <li>
+                    <Badge variant="outline" className="tabular-nums">
+                      {chart.bpm} BPM
+                    </Badge>
+                  </li>
+                )}
+                {chart.hasFiles ? (
+                  <li>
+                    <Badge variant="outline" className="tabular-nums">
+                      {formatDuration(chart.duration)}
+                    </Badge>
+                  </li>
+                ) : (
+                  <li>
+                    <Badge variant="outline" className="text-muted-foreground">
+                      <FileDashedIcon className="size-3" aria-hidden="true" />
+                      {t('db.noFiles')}
+                    </Badge>
+                  </li>
+                )}
               </CategoryLabels>
             </div>
             <ul

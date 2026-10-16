@@ -14,6 +14,7 @@ export type ChartFilters = {
   course: string
   level: string
   nijiiro: string
+  files: string
 }
 export function useChartOrderLabels(): Record<'' | ChartOrder, string> {
   const { t } = useTranslation()
@@ -141,6 +142,16 @@ export function ChartSearch({
             { value: 'no', label: t('db.nijiiroNo') },
           ]}
           onValueChange={(value) => onChange({ nijiiro: value })}
+        />
+        <ChoiceSelect
+          label={t('db.filterFiles')}
+          value={filters.files}
+          items={[
+            { value: '', label: t('db.filesAny') },
+            { value: 'yes', label: t('db.filesYes') },
+            { value: 'no', label: t('db.filesNo') },
+          ]}
+          onValueChange={(value) => onChange({ files: value })}
         />
       </div>
     </div>

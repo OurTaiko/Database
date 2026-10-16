@@ -38,6 +38,8 @@ export type Chart = Metadata & {
   audioHash: string
   audioSize: number
   coverHash?: string
+  /** False for a song registered without a TJA and audio: no blocks, no duration, empty file fields. */
+  hasFiles: boolean
   titleTranslations: Partial<Record<Locale, string>>
   subtitleTranslations: Partial<Record<Locale, string>>
 }

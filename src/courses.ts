@@ -36,8 +36,16 @@ export function baseCourse(key: string): BaseCourse {
 export function isSupportedCourse(value: string): value is BaseCourse {
   return Object.hasOwn(baseNames, value)
 }
-export function supportsChart(difficulties: { course: string }[]): boolean {
-  return difficulties.length > 0 && difficulties.every((d) => isSupportedCourse(d.course))
+/** Whether the site can show a chart: every block is a known course, and a
+ * chart with files has at least one. A song registered without files has none. */
+export function supportsChart(chart: {
+  difficulties: { course: string }[]
+  hasFiles?: boolean
+}): boolean {
+  const { difficulties, hasFiles = true } = chart
+  return (
+    (!hasFiles || difficulties.length > 0) && difficulties.every((d) => isSupportedCourse(d.course))
+  )
 }
 
 const tjaCourses: Record<string, BaseCourse> = {

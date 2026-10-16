@@ -16,12 +16,13 @@ import {
   UploadSimpleIcon as Upload,
 } from '@phosphor-icons/react'
 import { CoverPicker } from '@/components/cover-picker'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CategoryPicker } from './categories'
 import { uploadChart } from './api/client'
 import { useNotification } from './notification-context'
 import { useSession } from './session-context'
 import { isAudioFilename, maxAudio, maxTja } from './tja'
-import { officialIdPattern, parseNijiiroId } from './edit-metadata'
+import { officialIdPattern, parseBpm, parseNijiiroId } from './edit-metadata'
 
 function createRequestKey() {
   // getRandomValues remains available over LAN HTTP, unlike randomUUID.
@@ -31,16 +32,25 @@ function createRequestKey() {
 const emptyStateClassName =
   'flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed bg-card/60 px-6 py-16 text-center [&>p]:max-w-lg [&>p]:text-muted-foreground'
 
+type UploadMode = 'files' | 'song'
+
 // Adds an official chart: a TJA, its audio and what identifies the song. The
 // API parses and validates the files; this page only checks what it can see.
+// In song mode no files are sent: a song that is known but whose files are
+// not at hand is registered by its title, and its files are uploaded later
+// from its page.
 export function UploadPage() {
   const { t } = useTranslation()
   const { notify } = useNotification()
   const session = useSession(),
     navigate = useNavigate()
+  const [mode, setMode] = useState<UploadMode>('files')
   const [tja, setTja] = useState<File | null>(null),
     [audio, setAudio] = useState<File | null>(null),
     [cover, setCover] = useState<File | null>(null)
+  const [title, setTitle] = useState(''),
+    [subtitle, setSubtitle] = useState(''),
+    [bpm, setBpm] = useState('')
   const [nijiiroId, setNijiiroId] = useState(''),
     [officialId, setOfficialId] = useState('')
   const [categoryIds, setCategoryIds] = useState<string[]>([])
@@ -88,14 +98,17 @@ export function UploadPage() {
     if (tracks[0]) choose('audio', tracks[0])
   }
   const fileError =
-    tja && (!tja.size || tja.size > maxTja)
-      ? t('db.tjaTooLarge')
-      : audio && (!audio.size || audio.size > maxAudio)
-        ? t('db.audioTooLarge')
-        : ''
+    mode === 'song'
+      ? ''
+      : tja && (!tja.size || tja.size > maxTja)
+        ? t('db.tjaTooLarge')
+        : audio && (!audio.size || audio.size > maxAudio)
+          ? t('db.audioTooLarge')
+          : ''
+  const ready = mode === 'song' ? !!title.trim() : !!tja && !!audio
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!tja || !audio || busy || fileError) return
+    if (!ready || busy || fileError) return
     const official = officialId.trim()
     if (
       parseNijiiroId(nijiiroId) === undefined ||
@@ -104,14 +117,24 @@ export function UploadPage() {
       notify(t('db.identifierInvalid'), 'error')
       return
     }
+    if (mode === 'song' && parseBpm(bpm) === undefined) {
+      notify(t('db.songFieldsInvalid'), 'error')
+      return
+    }
     setBusy(true)
     setProgress(0)
     const abort = new AbortController()
     controller.current = abort
     try {
       const form = new FormData()
-      form.append('tja', tja)
-      form.append('audio', audio)
+      if (mode === 'song') {
+        form.append('title', title.trim())
+        form.append('subtitle', subtitle.trim())
+        form.append('bpm', bpm.trim())
+      } else {
+        form.append('tja', tja!)
+        form.append('audio', audio!)
+      }
       if (cover) form.append('cover', cover)
       form.append('description', description)
       form.append('categoryIds', JSON.stringify(categoryIds))
@@ -125,7 +148,10 @@ export function UploadPage() {
         setProgress,
       )
       navigate(`/charts/${chart.id}`)
-      notify(t('messages.chartPublished'), 'success')
+      notify(
+        mode === 'song' ? t('messages.songRegistered') : t('messages.chartPublished'),
+        'success',
+      )
     } catch (e) {
       if (!abort.signal.aborted) notify((e as Error).message, 'error')
     } finally {
@@ -169,27 +195,81 @@ export function UploadPage() {
     <>
       <div className="[&_p]:mt-2 [&_p]:text-sm [&_p]:text-muted-foreground">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('db.uploadTitle')}</h1>
-        <p>{t('db.uploadText')}</p>
+        <p>{mode === 'song' ? t('db.songOnlyText') : t('db.uploadText')}</p>
       </div>
+      <Tabs
+        value={mode}
+        onValueChange={(value) => {
+          if (busy) return
+          requestKey.current = createRequestKey()
+          setMode(value as UploadMode)
+        }}
+      >
+        <TabsList aria-label={t('db.uploadMode')}>
+          <TabsTrigger value="files">{t('db.uploadModeFiles')}</TabsTrigger>
+          <TabsTrigger value="song">{t('db.uploadModeSong')}</TabsTrigger>
+        </TabsList>
+      </Tabs>
       <form className="space-y-6" onSubmit={submit}>
-        <Card
-          className="min-w-0 gap-4 border p-5 shadow-none ring-0 sm:p-6"
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={drop}
-        >
-          <h2 className="text-base font-semibold">{t('db.uploadFiles')}</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {fileTile('tja')}
-            {fileTile('audio')}
-          </div>
-          <p className="text-sm text-muted-foreground">{t('db.uploadWaveHint')}</p>
-          {fileError && (
-            <p role="alert" className="text-sm text-destructive">
-              {fileError}
-            </p>
-          )}
-          <CoverPicker file={cover} onChange={setCover} disabled={busy} />
-        </Card>
+        {mode === 'song' ? (
+          <Card className="min-w-0 gap-4 border p-5 shadow-none ring-0 sm:p-6">
+            <h2 className="text-base font-semibold">{t('db.songInformation')}</h2>
+            <div className="grid gap-4 sm:grid-cols-[1fr_1fr_8rem]">
+              <div className="space-y-2">
+                <Label htmlFor="upload-title">{t('db.songTitle')}</Label>
+                <Input
+                  id="upload-title"
+                  value={title}
+                  maxLength={500}
+                  required
+                  disabled={busy}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="upload-subtitle">{t('db.songSubtitle')}</Label>
+                <Input
+                  id="upload-subtitle"
+                  value={subtitle}
+                  maxLength={500}
+                  disabled={busy}
+                  onChange={(e) => setSubtitle(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="upload-bpm">BPM</Label>
+                <Input
+                  id="upload-bpm"
+                  inputMode="decimal"
+                  value={bpm}
+                  disabled={busy}
+                  onChange={(e) => setBpm(e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">{t('db.songFieldsHint')}</p>
+            <CoverPicker file={cover} onChange={setCover} disabled={busy} />
+          </Card>
+        ) : (
+          <Card
+            className="min-w-0 gap-4 border p-5 shadow-none ring-0 sm:p-6"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={drop}
+          >
+            <h2 className="text-base font-semibold">{t('db.uploadFiles')}</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {fileTile('tja')}
+              {fileTile('audio')}
+            </div>
+            <p className="text-sm text-muted-foreground">{t('db.uploadWaveHint')}</p>
+            {fileError && (
+              <p role="alert" className="text-sm text-destructive">
+                {fileError}
+              </p>
+            )}
+            <CoverPicker file={cover} onChange={setCover} disabled={busy} />
+          </Card>
+        )}
         <Card className="min-w-0 gap-5 border p-5 shadow-none ring-0 sm:p-6">
           <h2 className="text-base font-semibold">{t('db.record')}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -237,9 +317,9 @@ export function UploadPage() {
           </div>
         )}
         <div className="flex flex-wrap gap-3">
-          <Button type="submit" size="lg" disabled={!tja || !audio || busy || !!fileError}>
+          <Button type="submit" size="lg" disabled={!ready || busy || !!fileError}>
             <Upload size={17} aria-hidden="true" />
-            {t('db.upload')}
+            {mode === 'song' ? t('db.registerSong') : t('db.upload')}
           </Button>
           {busy && (
             <Button
