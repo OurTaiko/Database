@@ -126,10 +126,14 @@ func (s *Server) gameCatalog(w http.ResponseWriter, r *http.Request) {
 		categories = append(categories, category)
 	}
 	s.chartNames(r.Context(), charts)
-	respond(w, 200, map[string]any{
+	body := map[string]any{
 		"categories": categories, "charts": charts, "chartCount": len(charts), "playlists": playlists, "playlistVersion": 1,
 		"chartSlotVersion": 1, "resourceDownloadVersion": 1, "scoreReplayVersion": 1,
-	})
+	}
+	if s.Config.SSO != nil {
+		body["sso"] = s.Config.SSO.GameAccounts()
+	}
+	respond(w, 200, body)
 }
 
 // gameSearch is the game's song picker: keyword, course and star level that
