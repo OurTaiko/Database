@@ -758,5 +758,8 @@
     "save": "保存",
     "cancel": "取消",
     "signInToEdit": "请先登录。"
+  },
+  "ourtaikoProfile": {
+    "nav": "我的 Profile"
   }
 }

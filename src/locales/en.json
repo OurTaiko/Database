@@ -763,5 +763,8 @@
     "save": "Save",
     "cancel": "Cancel",
     "signInToEdit": "Please sign in first."
+  },
+  "ourtaikoProfile": {
+    "nav": "My Profile"
   }
 }

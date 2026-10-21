@@ -758,5 +758,8 @@
     "save": "保存",
     "cancel": "キャンセル",
     "signInToEdit": "ログインしてください。"
+  },
+  "ourtaikoProfile": {
+    "nav": "マイ Profile"
   }
 }

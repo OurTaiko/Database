@@ -758,5 +758,8 @@
     "save": "저장",
     "cancel": "취소",
     "signInToEdit": "먼저 로그인해 주세요."
+  },
+  "ourtaikoProfile": {
+    "nav": "내 Profile"
   }
 }
