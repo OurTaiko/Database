@@ -123,6 +123,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/game/catalog", s.gameCatalog)
 	mux.HandleFunc("GET /api/v1/game/search", s.gameSearch)
 	mux.HandleFunc("GET /api/v1/game/scores", s.gameScoreList)
+	mux.HandleFunc("GET /api/v1/users/{id}/scores", s.userScores)
 	mux.HandleFunc("POST /api/v1/game/scores", s.submitScore)
 	mux.HandleFunc("GET /api/v1/game/playlists", s.gamePlaylistList)
 	mux.HandleFunc("GET /api/v1/playlists", s.listPlaylists)
