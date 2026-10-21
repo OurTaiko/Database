@@ -128,7 +128,7 @@ func (s *Server) gameCatalog(w http.ResponseWriter, r *http.Request) {
 	s.chartNames(r.Context(), charts)
 	body := map[string]any{
 		"categories": categories, "charts": charts, "chartCount": len(charts), "playlists": playlists, "playlistVersion": 1,
-		"chartSlotVersion": 1, "resourceDownloadVersion": 1, "scoreReplayVersion": 1,
+		"chartSlotVersion": 1, "resourceDownloadVersion": 1, "scoreReplayVersion": 1, "danVersion": 1,
 	}
 	if s.Config.SSO != nil {
 		body["sso"] = s.Config.SSO.GameAccounts()

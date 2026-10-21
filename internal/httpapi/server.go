@@ -32,6 +32,8 @@ type Config struct {
 	// development only: main refuses it with SSO or a non-loopback listener.
 	DevUserID      string
 	TrustedProxies []netip.Prefix
+	// Profile is nil when 段位 attempts earn nothing (no OurTaikoProfile configured).
+	Profile *ProfileClient
 }
 type Server struct {
 	DB      *pgxpool.Pool
@@ -124,6 +126,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/game/search", s.gameSearch)
 	mux.HandleFunc("GET /api/v1/game/scores", s.gameScoreList)
 	mux.HandleFunc("GET /api/v1/users/{id}/scores", s.userScores)
+	mux.HandleFunc("GET /api/v1/dans", s.listDans)
+	mux.HandleFunc("GET /api/v1/dans/{id}", s.danDetail)
+	mux.HandleFunc("POST /api/v1/dans", s.createDan)
+	mux.HandleFunc("PUT /api/v1/dans/{id}", s.updateDan)
+	mux.HandleFunc("DELETE /api/v1/dans/{id}", s.deleteDan)
+	mux.HandleFunc("PUT /api/v1/dans/{id}/official", s.markDanOfficial)
+	mux.HandleFunc("GET /api/v1/game/dans", s.gameDans)
+	mux.HandleFunc("POST /api/v1/game/dan-attempts", s.submitDanAttempt)
 	mux.HandleFunc("POST /api/v1/game/scores", s.submitScore)
 	mux.HandleFunc("GET /api/v1/game/playlists", s.gamePlaylistList)
 	mux.HandleFunc("GET /api/v1/playlists", s.listPlaylists)

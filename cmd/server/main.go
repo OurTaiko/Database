@@ -106,7 +106,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	app := httpapi.New(pool, httpapi.Config{SSO: sso, DevUserID: devUser, TrustedProxies: proxies, Origin: env("APP_ORIGIN", "http://127.0.0.1:5174"), Storage: storage, Objects: objects, CookieSecure: env("COOKIE_SECURE", "false") == "true"})
+	var profile *httpapi.ProfileClient
+	if os.Getenv("PROFILE_URL") != "" {
+		profile, err = httpapi.NewProfile(httpapi.ProfileConfig{URL: os.Getenv("PROFILE_URL"), ServiceID: os.Getenv("PROFILE_SERVICE_ID"), ServiceKey: os.Getenv("PROFILE_SERVICE_KEY")})
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	app := httpapi.New(pool, httpapi.Config{Profile: profile, SSO: sso, DevUserID: devUser, TrustedProxies: proxies, Origin: env("APP_ORIGIN", "http://127.0.0.1:5174"), Storage: storage, Objects: objects, CookieSecure: env("COOKIE_SECURE", "false") == "true"})
 	if err = app.EnsureStorage(); err != nil {
 		log.Fatal(err)
 	}
