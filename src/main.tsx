@@ -15,6 +15,7 @@ import { NotificationProvider } from './notifications'
 import { CategoryProvider } from './categories'
 import { ProfilePage } from './profile'
 import { MyPlaylistsPage, PlaylistPage, PlaylistsPage } from './playlists'
+import { DanEditorPage, DanPage, DansPage } from './dans'
 import './styles.css'
 import { ThemeProvider } from './theme'
 function App() {
@@ -38,6 +39,10 @@ function App() {
                         <Route path="charts/:id" element={<Detail />} />
                         <Route path="charts/:id/edit" element={<ChartEditorPage />} />
                         <Route path="playlists" element={<PlaylistsPage />} />
+                        <Route path="dans" element={<DansPage />} />
+                        <Route path="dans/new" element={<DanEditorPage />} />
+                        <Route path="dans/:id" element={<DanPage />} />
+                        <Route path="dans/:id/edit" element={<DanEditorPage />} />
                         <Route path="playlists/:id" element={<PlaylistPage />} />
                         <Route path="me/playlists" element={<MyPlaylistsPage />} />
                         <Route path="login" element={<Auth key="login" />} />

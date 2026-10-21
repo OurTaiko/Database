@@ -22,6 +22,9 @@ export type ChartQuery = {
 }
 
 export const endpoints = {
+  dans: `${API_ROOT}/dans`,
+  dan: (id: string) => `${API_ROOT}/dans/${encodeURIComponent(id)}`,
+  danOfficial: (id: string) => `${API_ROOT}/dans/${encodeURIComponent(id)}/official`,
   me: `${API_ROOT}/me`,
   categories: `${API_ROOT}/categories`,
   uploadRules: `${API_ROOT}/upload-rules`,

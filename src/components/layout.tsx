@@ -9,6 +9,7 @@ import {
   UserIcon as UserRound,
   ListIcon as Menu,
   PlaylistIcon,
+  MedalIcon,
 } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Notice } from '@/notifications'
@@ -34,6 +35,7 @@ export function Layout() {
   const links = [
     { to: '/', label: t('db.browse'), icon: Compass },
     { to: '/playlists', label: t('playlists.plaza'), icon: PlaylistIcon },
+    { to: '/dans', label: t('dans.nav'), icon: MedalIcon },
     ...(session.user?.canUpload
       ? [
           { to: '/upload', label: t('db.upload'), icon: Upload },
