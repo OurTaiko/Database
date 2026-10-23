@@ -10,6 +10,9 @@ import { SessionProvider } from './session'
 import { Layout } from '@/components/layout'
 import { Auth, Detail, Library } from './pages'
 import { UploadPage } from './upload'
+import { UsersPage } from './users'
+import { UserSpacePage } from './user-space'
+import { NotificationsPage } from './notification-center'
 import { ChartEditorPage } from './chart-editor'
 import { NotificationProvider } from './notifications'
 import { CategoryProvider } from './categories'
@@ -33,15 +36,20 @@ function App() {
                     <Routes>
                       <Route element={<Layout />}>
                         <Route index element={<Library />} />
+                        <Route path="users" element={<UsersPage />} />
+                        <Route path="users/:id" element={<UserSpacePage />} />
+                        <Route path="notifications" element={<NotificationsPage />} />
                         <Route path="me/profile" element={<ProfilePage />} />
                         <Route path="me/charts" element={<Library mine />} />
                         <Route path="upload" element={<UploadPage />} />
                         <Route path="charts/:id" element={<Detail />} />
+                        <Route path="charts/:id/comments/:commentId" element={<Detail />} />
                         <Route path="charts/:id/edit" element={<ChartEditorPage />} />
                         <Route path="playlists" element={<PlaylistsPage />} />
                         <Route path="dans" element={<DansPage />} />
                         <Route path="dans/new" element={<DanEditorPage />} />
                         <Route path="dans/:id" element={<DanPage />} />
+                        <Route path="dans/:id/comments/:commentId" element={<DanPage />} />
                         <Route path="dans/:id/edit" element={<DanEditorPage />} />
                         <Route path="playlists/:id" element={<PlaylistPage />} />
                         <Route path="me/playlists" element={<MyPlaylistsPage />} />

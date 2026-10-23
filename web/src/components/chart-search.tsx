@@ -5,7 +5,16 @@ import { SearchInput } from '@/components/search-input'
 import { categoryName, useCategories } from '@/categories'
 import { cn } from '@/lib/utils'
 
-export const chartOrders = ['nijiiro', 'title', 'level', 'bpm', 'updated'] as const
+export const chartOrders = [
+  'hot',
+  'top',
+  'comments',
+  'nijiiro',
+  'title',
+  'level',
+  'bpm',
+  'updated',
+] as const
 export type ChartOrder = (typeof chartOrders)[number]
 export const filterCourses = ['Easy', 'Normal', 'Hard', 'Oni', 'Edit'] as const
 export type ChartFilters = {
@@ -20,6 +29,9 @@ export function useChartOrderLabels(): Record<'' | ChartOrder, string> {
   const { t } = useTranslation()
   return {
     '': t('db.orderLatest'),
+    hot: t('interactions.orderHot'),
+    top: t('interactions.orderTop'),
+    comments: t('interactions.orderComments'),
     nijiiro: t('db.orderNijiiro'),
     title: t('db.orderTitle'),
     level: t('db.orderLevel'),
@@ -35,12 +47,15 @@ export function ChartSearch({
   onSearch,
   onPendingChange,
   onChange,
+  counts = true,
 }: {
   query: string
   filters: ChartFilters
   onSearch: (query: string) => void
   onPendingChange: (pending: boolean) => void
   onChange: (values: Partial<ChartFilters>) => void
+  /** The chips' chart counts are the whole catalogue's: off for a user's own list. */
+  counts?: boolean
 }) {
   const { t } = useTranslation()
   const labels = useChartOrderLabels()
@@ -102,9 +117,13 @@ export function ChartSearch({
                   onClick={() => onChange({ category: category.id })}
                 >
                   {category.id ? categoryName(category) : category.title}
-                  <span className={cn('text-xs tabular-nums', !active && 'text-muted-foreground')}>
-                    {category.chartCount}
-                  </span>
+                  {counts && (
+                    <span
+                      className={cn('text-xs tabular-nums', !active && 'text-muted-foreground')}
+                    >
+                      {category.chartCount}
+                    </span>
+                  )}
                 </button>
               </li>
             )

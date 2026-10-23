@@ -22,16 +22,19 @@ import {
   FileDashedIcon,
   PlaylistIcon,
   UploadSimpleIcon,
+  ChatCircleIcon,
 } from '@phosphor-icons/react'
 import { api, jsonRequest } from './api/client'
 import { AddToPlaylistDialog } from './playlist-dialogs'
-import type { Chart, ChartList } from './api/types'
+import type { Chart, ChartList, Vote, VoteResult } from './api/types'
 import { ChartCard, formatDuration } from '@/components/chart-card'
 import { supportsChart } from './courses'
 import { useSession } from './session-context'
 import { EditMetadata } from './edit-metadata'
 import { UploadFilesDialog } from './upload-files-dialog'
 import { ChartActivity } from './chart-activity'
+import { CommentSection, chartSubject } from './comments'
+import { VoteControl } from '@/components/vote-control'
 import { Modal, Notice } from './notifications'
 import { useNotification } from './notification-context'
 import { CategoryLabels, useCategories } from './categories'
@@ -41,7 +44,17 @@ import { coverSource } from './cover'
 const emptyStateClassName =
   'flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed bg-card/60 px-6 py-16 text-center [&>p]:max-w-lg [&>p]:text-muted-foreground'
 
-export function Library({ mine = false }: { mine?: boolean }) {
+export function Library({
+  mine = false,
+  ownerId,
+  embedded = false,
+}: {
+  mine?: boolean
+  /** Only this user's uploads, as on their user page. */
+  ownerId?: string
+  /** Inside another page: no page heading. */
+  embedded?: boolean
+}) {
   const { t } = useTranslation()
   const [params, setParams] = useSearchParams(),
     { user, loading: authLoading } = useSession()
@@ -82,13 +95,18 @@ export function Library({ mine = false }: { mine?: boolean }) {
   }
   const { order, category, course, nijiiro, files } = filters
   const stars = filters.level
+  const uploader = mine ? '' : ownerId || ''
+
   useEffect(() => {
     if (mine && !user) return
     const controller = new AbortController()
     setLoading(true)
     setError('')
     api<ChartList>(
-      endpoints.chartList({ q, page, order, category, course, level: stars, nijiiro, files }, mine),
+      endpoints.chartList(
+        { q, page, order, category, course, level: stars, nijiiro, files, uploader },
+        mine,
+      ),
       { signal: controller.signal },
     )
       .then((result) => {
@@ -101,7 +119,7 @@ export function Library({ mine = false }: { mine?: boolean }) {
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [mine, user, q, page, order, category, course, stars, nijiiro, files])
+  }, [mine, user, q, page, order, category, course, stars, nijiiro, files, uploader])
   if (mine && !user)
     return (
       <div className={emptyStateClassName}>
@@ -128,19 +146,22 @@ export function Library({ mine = false }: { mine?: boolean }) {
   const filtered = !!(q || category || course || stars || nijiiro || files)
   return (
     <>
-      <div className="[&_p]:mt-2 [&_p]:text-sm [&_p]:text-muted-foreground">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          {mine ? t('db.myUploads') : t('db.heroTitle')}
-        </h1>
-        <p>{mine ? t('db.myUploadsText') : t('db.heroText', { count: chartCount })}</p>
-      </div>
+      {!embedded && (
+        <div className="[&_p]:mt-2 [&_p]:text-sm [&_p]:text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            {mine ? t('db.myUploads') : t('db.heroTitle')}
+          </h1>
+          <p>{mine ? t('db.myUploadsText') : t('db.heroText', { count: chartCount })}</p>
+        </div>
+      )}
       <ChartSearch
-        key={mine ? 'mine' : 'all'}
+        key={mine ? 'mine' : ownerId ? `user:${ownerId}` : 'all'}
         query={q}
         filters={filters}
         onSearch={search}
         onPendingChange={setSearchPending}
         onChange={update}
+        counts={!mine && !uploader}
       />
       <h2 className="flex items-center gap-2 text-base font-semibold [&_span]:text-muted-foreground">
         {q ? t('messages.searchResults', { query: q }) : t('db.results')}
@@ -199,9 +220,19 @@ export function Library({ mine = false }: { mine?: boolean }) {
       ) : (
         <div className={emptyStateClassName}>
           <h2 className="text-base font-semibold">
-            {filtered ? t('messages.noMatchingCharts') : t('db.noCharts')}
+            {filtered
+              ? t('messages.noMatchingCharts')
+              : uploader
+                ? t('messages.noPublishedChartsYet')
+                : t('db.noCharts')}
           </h2>
-          <p>{filtered ? t('messages.tryOtherSearchFilters') : t('db.noChartsText')}</p>
+          <p>
+            {filtered
+              ? t('messages.tryOtherSearchFilters')
+              : uploader
+                ? t('messages.memberHasNoPublicCharts')
+                : t('db.noChartsText')}
+          </p>
         </div>
       )}
     </>
@@ -268,7 +299,7 @@ function formatBytes(bytes: number) {
 export function Detail() {
   const { t } = useTranslation()
   const { notify } = useNotification()
-  const { id } = useParams(),
+  const { id, commentId } = useParams(),
     session = useSession(),
     navigate = useNavigate()
   const [chart, setChart] = useState<Chart | null>(null),
@@ -422,6 +453,31 @@ export function Detail() {
                 <span className="max-sm:hidden">{t('playlists.addToPlaylist')}</span>
               </Button>
             )}
+            <div className="hidden flex-1 sm:block" />
+            <VoteControl
+              className="rounded-full bg-[#f5f5f7] px-1 py-0.5 dark:bg-muted"
+              score={chart.score}
+              myVote={chart.myVote}
+              label={t('interactions.voteOnChart')}
+              onVote={(value: Vote) =>
+                api<VoteResult>(
+                  endpoints.chartVote(chart.id),
+                  jsonRequest('PUT', { value }, session.csrfToken),
+                )
+              }
+              onResult={(result) =>
+                setChart((current) =>
+                  current?.id === chart.id ? { ...current, ...result } : current,
+                )
+              }
+            />
+            <a
+              href="#comments"
+              className="inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground hover:text-foreground max-sm:hidden"
+            >
+              <ChatCircleIcon size={18} aria-hidden="true" />
+              {t('interactions.commentCount', { count: chart.commentCount })}
+            </a>
           </div>
         </div>
         {chart.hasFiles ? (
@@ -505,6 +561,19 @@ export function Detail() {
               )}
             </section>
           )}
+          <div className="mt-6">
+            <CommentSection
+              subject={chartSubject(chart)}
+              focusId={commentId}
+              onCountChange={(delta) =>
+                setChart((current) =>
+                  current?.id === chart.id
+                    ? { ...current, commentCount: Math.max(0, current.commentCount + delta) }
+                    : current,
+                )
+              }
+            />
+          </div>
         </div>
         <aside className="flex min-w-0 flex-col gap-6">
           <section

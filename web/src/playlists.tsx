@@ -188,6 +188,15 @@ function PublicPlaylists({ ownerId, refresh = 0 }: { ownerId?: string; refresh?:
   )
 }
 
+export function UserPlaylists({ ownerId }: { ownerId: string }) {
+  const { t } = useTranslation()
+  return (
+    <section className="min-w-0 space-y-6" aria-label={t('playlists.userPlaylists')}>
+      <PublicPlaylists ownerId={ownerId} />
+    </section>
+  )
+}
+
 export function PlaylistsPage() {
   const { t } = useTranslation()
   const session = useSession()

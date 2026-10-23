@@ -42,7 +42,126 @@ export type Chart = Metadata & {
   hasFiles: boolean
   titleTranslations: Partial<Record<Locale, string>>
   subtitleTranslations: Partial<Record<Locale, string>>
+  score: number
+  upvotes: number
+  downvotes: number
+  commentCount: number
+  /** Only filled on the signed-in detail view. */
+  myVote: Vote
 }
+export type Vote = -1 | 0 | 1
+export type VoteResult = { score: number; upvotes?: number; downvotes?: number; myVote: Vote }
+export type CommentSort = 'best' | 'top' | 'new' | 'old' | 'controversial'
+export type Comment = {
+  id: string
+  /** The chart the comment is on, or (for a 段位 course) the course. */
+  chartId?: number
+  chartTitle?: string
+  danId?: string
+  danTitle?: Record<string, string>
+  parentId: string | null
+  depth: number
+  authorId: string
+  author: string
+  authorAvatarUrl?: string
+  body: string
+  createdAt: string
+  editedAt: string | null
+  deleted: boolean
+  removed: boolean
+  score: number
+  myVote: Vote
+  replyCount: number
+  replies: Comment[]
+}
+export type CommentPage = {
+  items: Comment[]
+  total: number
+  commentCount: number
+  page: number
+  pageSize: number
+  sort: CommentSort
+}
+export type CommentThread = { item: Comment; sort: CommentSort }
+export type CommentList = { items: Comment[]; total: number; page: number; pageSize: number }
+export type NotificationKind =
+  | 'comment_reply'
+  | 'chart_comment'
+  | 'chart_upvotes'
+  | 'dan_comment'
+  | 'dan_upvotes'
+  | 'comment_upvotes'
+  | 'comment_removed'
+export type AppNotification = {
+  id: string
+  // Unknown future kinds still render with a generic message.
+  kind: NotificationKind | (string & {})
+  createdAt: string
+  read: boolean
+  actor: { id: string; nickname: string; avatarUrl?: string } | null
+  chart: { id: number; title: string } | null
+  dan: { id: string; title: Record<string, string> } | null
+  comment: { id: string; parentId: string | null; excerpt: string } | null
+  data: {
+    upvotes?: number
+    /** playlist_removed: the deleted playlist's name. */
+    name?: string
+  } & Record<string, unknown>
+}
+export type NotificationPage = {
+  items: AppNotification[]
+  total: number
+  unread: number
+  page: number
+  pageSize: number
+}
+export type NotificationSetting = { kind: NotificationKind | (string & {}); enabled: boolean }
+export type LeaderboardEntry = {
+  id: string
+  userId: string
+  nickname: string
+  avatarUrl?: string
+  rank: number
+  score: number
+  good: number
+  ok: number
+  bad: number
+  drumroll: number
+  submittedAt: string
+}
+export type Leaderboard = {
+  songId: number
+  /** The ranked chart block; `course` and `side` describe it. */
+  difficultyId: number
+  course: string
+  side: string
+  items: LeaderboardEntry[]
+  total: number
+  page: number
+  pageSize: number
+}
+export type PublicUser = {
+  id: string
+  nickname: string | null
+  avatarUrl?: string
+  firstLoginAt: string | null
+  lastActiveAt: string | null
+  /** Published charts the user uploaded. */
+  chartCount: number
+  scoreCount: number
+  commentCount: number
+  karma: number
+  /** Public playlists only. */
+  playlistCount: number
+}
+export type UserDirectory = {
+  items: PublicUser[]
+  total: number
+  page: number
+  pageSize: number
+  profilesAvailable: boolean
+}
+export type UserSpace = { user: PublicUser; profilesAvailable: boolean }
 export type ChartList = { items: Chart[]; total: number; page: number; pageSize: number }
 
 /** A playlist's ID is a decimal number, or a word for a system playlist, which
@@ -114,6 +233,12 @@ export type Dan = {
   owner: string
   createdAt: string
   updatedAt: string
+  score: number
+  upvotes: number
+  downvotes: number
+  commentCount: number
+  /** Only filled on the detail page. */
+  myVote: Vote
 }
 export type DanInput = {
   title: Record<string, string>

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { NotificationBell } from '@/notification-center'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import {
   CompassIcon as Compass,
@@ -10,6 +11,7 @@ import {
   ListIcon as Menu,
   PlaylistIcon,
   MedalIcon,
+  UsersIcon,
   IdentificationCardIcon,
 } from '@phosphor-icons/react'
 import { useState } from 'react'
@@ -38,6 +40,7 @@ export function Layout() {
     { to: '/', label: t('db.browse'), icon: Compass },
     { to: '/playlists', label: t('playlists.plaza'), icon: PlaylistIcon },
     { to: '/dans', label: t('dans.nav'), icon: MedalIcon },
+    { to: '/users', label: t('messages.userSquare'), icon: UsersIcon },
     ...(session.user
       ? [
           {
@@ -112,6 +115,7 @@ export function Layout() {
               <span className="text-muted-foreground text-xs">{t('messages.connecting')}</span>
             ) : session.user ? (
               <>
+                <NotificationBell />
                 <Link
                   className="flex items-center gap-2 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring max-w-40"
                   to="/me/profile"

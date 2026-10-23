@@ -8,6 +8,7 @@ import {
   FileAudioIcon as FileMusic,
   GitBranchIcon,
   PlayIcon,
+  TrophyIcon,
   StarIcon,
   ArrowCounterClockwiseIcon as RotateCcw,
 } from '@phosphor-icons/react'
@@ -16,6 +17,7 @@ import { baseCourse, blockKey, groupCourses, groupLevel, groupName } from './cou
 import { Notice } from './notifications'
 import { defaultDifficulty } from './chart-difficulty'
 import { maxTja } from './tja'
+import { ChartLeaderboard } from './chart-leaderboard'
 
 const ChartPreview = lazy(() => import('./chart-preview'))
 const EmbeddedPlayer = lazy(() => import('./embedded-player'))
@@ -36,9 +38,9 @@ const tabButtonClassName =
 const difficultyTabClassName =
   'bg-transparent text-[color-mix(in_oklab,var(--difficulty-fg)_65%,transparent)] hover:bg-transparent hover:text-[var(--difficulty-fg)] focus-visible:ring-[var(--difficulty-fg)] data-active:hover:bg-[var(--difficulty-bg)] data-active:bg-[var(--difficulty-bg)] data-active:text-[var(--difficulty-fg)] dark:bg-transparent dark:text-[color-mix(in_oklab,var(--difficulty-fg)_65%,transparent)] dark:hover:bg-transparent dark:hover:text-[var(--difficulty-fg)] dark:data-active:hover:bg-[var(--difficulty-bg)] dark:data-active:bg-[var(--difficulty-bg)] dark:data-active:text-[var(--difficulty-fg)]'
 
-export type ActivityTab = 'image' | 'preview'
+export type ActivityTab = 'image' | 'preview' | 'leaderboard'
 
-// The chart image of one block, or the embedded player playing it. A course
+// The chart image of one block, the embedded player playing it, or its leaderboard. A course
 // may have a single, a 1P and a 2P chart: one tab per course, then a side
 // switch. `course` is the block's key.
 export function ChartActivity({ chart }: { chart: Chart }) {
@@ -96,6 +98,10 @@ export function ChartActivity({ chart }: { chart: Chart }) {
           <TabsTrigger value="preview" className={tabButtonClassName}>
             <PlayIcon size={18} aria-hidden="true" />
             {t('messages.chartPreview')}
+          </TabsTrigger>
+          <TabsTrigger value="leaderboard" className={tabButtonClassName}>
+            <TrophyIcon size={18} aria-hidden="true" />
+            {t('messages.leaderboard')}
           </TabsTrigger>
         </TabsList>
         <div className="-mx-1 flex min-w-0 max-w-full items-center gap-3 overflow-x-auto px-1 py-1">
@@ -163,7 +169,12 @@ export function ChartActivity({ chart }: { chart: Chart }) {
         </div>
       </div>
       <div className="min-w-0">
-        {error ? (
+        {/* The leaderboard does not need the TJA. */}
+        {tab === 'leaderboard' ? (
+          <TabsContent value="leaderboard">
+            <ChartLeaderboard key={course} chart={chart} course={course} />
+          </TabsContent>
+        ) : error ? (
           <div className="flex min-h-40 flex-col items-center justify-center gap-3 py-6 text-center">
             <Notice>{error}</Notice>
             <Button variant="outline" size="default" onClick={() => setAttempt((n) => n + 1)}>
