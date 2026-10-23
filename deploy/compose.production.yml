@@ -1,0 +1,33 @@
+name: ourtaiko-database
+services:
+  database:
+    image: ourtaiko-database:release
+    build: ${DATABASE_SOURCE_DIR:-/opt/ourtaiko-database/src/database}
+    container_name: ourtaiko-database
+    restart: unless-stopped
+    env_file:
+      - path: /etc/ourtaiko-database/api.env
+        format: raw
+    environment:
+      LISTEN_ADDR: 0.0.0.0:8081
+      STORAGE_DIR: /tmp/staging
+      STORAGE_BACKEND: s3
+    ports: ['127.0.0.1:8081:8081']
+    volumes:
+      - /etc/ourtaiko-database/postgres-ca.crt:/etc/ourtaiko-database/postgres-ca.crt:ro
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=1g']
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:8081/readyz']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks: [shared]
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+networks:
+  shared: {external: true, name: ourtaiko-shared}

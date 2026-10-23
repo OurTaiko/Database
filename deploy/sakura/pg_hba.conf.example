@@ -8,6 +8,8 @@ host      ourtaiko_database  all                    samenet            scram-sha
 # Remote database tools: TLS only, viewer and editor only, listed addresses only.
 # 154.64.230.124 is ourtaiko-prod (its CloudBeaver at postgre.ourtaiko.org).
 hostssl   ourtaiko_database  ourtaiko_database_viewer,ourtaiko_database_editor  154.64.230.124/32  scram-sha-256
+# The website and API on ourtaiko-prod: the owner role (it runs migrations), TLS only.
+hostssl   ourtaiko_database  ourtaiko_database      154.64.230.124/32  scram-sha-256
 # Everything else is refused.
 host      all                all                    0.0.0.0/0          reject
 host      all                all                    ::/0               reject

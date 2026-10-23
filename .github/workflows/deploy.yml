@@ -1,0 +1,120 @@
+name: Deploy OurTaikoDatabase
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Do not interrupt an in-progress server publish when another commit arrives.
+concurrency:
+  group: ourtaiko-database-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Check out the triggering commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm from package.json
+        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1 # v4.2.0
+        with:
+          package_json_file: web/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Build unified image
+        working-directory: .
+        run: docker build --label org.opencontainers.image.revision=${{ github.sha }} -t ourtaiko-database:${{ github.sha }} .
+
+      - name: Package unified image
+        id: image
+        working-directory: .
+        run: |
+          docker save ourtaiko-database:${{ github.sha }} | gzip -1 > database-image.tar.gz
+          digest=$(sha256sum database-image.tar.gz)
+          echo "sha256=${digest%% *}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate deployment secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          DEPLOY_FINGERPRINT: ${{ secrets.DEPLOY_FINGERPRINT }}
+        run: |
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_PASSWORD DEPLOY_FINGERPRINT; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing required repository secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Upload unified image
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
+        with:
+          version: '1.8.1'
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT || '22' }}
+          username: ${{ secrets.DEPLOY_USER }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          fingerprint: ${{ secrets.DEPLOY_FINGERPRINT }}
+          source: database-image.tar.gz
+          target: ${{ secrets.DEPLOY_BASE_PATH || '/opt/ourtaiko-database' }}/incoming/${{ github.sha }}
+          command_timeout: 15m
+
+      - name: Prepare the publish script from this commit
+        working-directory: .
+        # Explicitly use Bash regardless of the SSH user's default shell.
+        run: |
+          {
+            printf "bash -se <<'DATABASE_PUBLISH_SCRIPT'\n"
+            cat deploy/publish.sh
+            printf '\nDATABASE_PUBLISH_SCRIPT\n'
+          } > "$RUNNER_TEMP/publish-database.sh"
+
+      - name: Publish over SSH
+        uses: appleboy/ssh-action@91f3272fc5907f4699dcf59761eb622a07342f5a # v1.2.3
+        env:
+          DEPLOY_REVISION: ${{ github.sha }}
+          DEPLOY_BASE_PATH: ${{ secrets.DEPLOY_BASE_PATH }}
+          DEPLOY_GIT_REMOTE: ${{ secrets.DEPLOY_GIT_REMOTE }}
+          DEPLOY_IMAGE_ARCHIVE: ${{ secrets.DEPLOY_BASE_PATH || '/opt/ourtaiko-database' }}/incoming/${{ github.sha }}/database-image.tar.gz
+          DEPLOY_IMAGE_SHA256: ${{ steps.image.outputs.sha256 }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT || '22' }}
+          username: ${{ secrets.DEPLOY_USER }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          fingerprint: ${{ secrets.DEPLOY_FINGERPRINT }}
+          version: '1.8.1'
+          command_timeout: 30m
+          envs: DEPLOY_REVISION,DEPLOY_BASE_PATH,DEPLOY_GIT_REMOTE,DEPLOY_IMAGE_ARCHIVE,DEPLOY_IMAGE_SHA256
+          script_path: ${{ runner.temp }}/publish-database.sh
