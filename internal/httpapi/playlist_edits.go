@@ -202,7 +202,7 @@ func (s *Server) editPlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 // deletePlaylist lets the owner delete a playlist, and an administrator a
-// public one. There are no notifications here, so the owner is not told.
+// public one; the owner is then told, as on Fanmade.
 func (s *Server) deletePlaylist(w http.ResponseWriter, r *http.Request) {
 	u, ok := s.required(w, r, true)
 	if !ok {
@@ -216,12 +216,12 @@ func (s *Server) deletePlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(ctx)
-	var owner string
+	var owner, name string
 	var public bool
 	var covers []*int64
 	e = pgx.ErrNoRows
 	if valid {
-		e = tx.QueryRow(ctx, `SELECT owner_id,is_public,ARRAY[cover_file,game_cover_file] FROM playlists WHERE id=$1 FOR UPDATE`, id).Scan(&owner, &public, &covers)
+		e = tx.QueryRow(ctx, `SELECT owner_id,name,is_public,ARRAY[cover_file,game_cover_file] FROM playlists WHERE id=$1 FOR UPDATE`, id).Scan(&owner, &name, &public, &covers)
 	}
 	if errors.Is(e, pgx.ErrNoRows) || (e == nil && owner != u.User.ID && !public) {
 		problem(w, 404, "PLAYLIST_NOT_FOUND", "歌单不存在或未公开")
@@ -235,7 +235,11 @@ func (s *Server) deletePlaylist(w http.ResponseWriter, r *http.Request) {
 		problem(w, 403, "FORBIDDEN", "只能删除自己的歌单")
 		return
 	}
-	if _, e = tx.Exec(ctx, `DELETE FROM playlists WHERE id=$1`, id); e == nil {
+	if _, e = tx.Exec(ctx, `DELETE FROM playlists WHERE id=$1`, id); e == nil && owner != u.User.ID {
+		// The owner learns of a removal, but not which administrator removed it.
+		e = notify(ctx, tx, Notice{Recipient: owner, Kind: "playlist_removed", Data: map[string]any{"name": name}})
+	}
+	if e == nil {
 		e = tx.Commit(ctx)
 	}
 	if e != nil {

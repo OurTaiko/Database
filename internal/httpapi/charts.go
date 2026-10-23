@@ -23,20 +23,26 @@ type Chart struct {
 	UploaderID string  `json:"uploaderId"`
 	Uploader   string  `json:"uploader"`
 	// UploaderAvatarURL is empty when the uploader has no avatar or SSO is unavailable.
-	UploaderAvatarURL string    `json:"uploaderAvatarUrl"`
-	Description       string    `json:"description"`
-	CreatedAt         time.Time `json:"createdAt"`
-	UpdateAt          time.Time `json:"updateAt"`
-	Duration          float64   `json:"duration"`
-	DemoEnd           float64   `json:"demoEnd"`
-	CategoryIDs       []string  `json:"categoryIds"`
-	TJAName           string    `json:"tjaName"`
-	AudioName         string    `json:"audioName"`
-	TJAHash           string    `json:"tjaHash"`
-	TJASize           int64     `json:"tjaSize"`
-	AudioHash         string    `json:"audioHash"`
-	AudioSize         int64     `json:"audioSize"`
-	CoverHash         string    `json:"coverHash,omitempty"`
+	UploaderAvatarURL string `json:"uploaderAvatarUrl"`
+	Description       string `json:"description"`
+	// Votes and comments; MyVote is only filled for the signed-in detail view.
+	Score        int       `json:"score"`
+	Upvotes      int       `json:"upvotes"`
+	Downvotes    int       `json:"downvotes"`
+	CommentCount int       `json:"commentCount"`
+	MyVote       int       `json:"myVote"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdateAt     time.Time `json:"updateAt"`
+	Duration     float64   `json:"duration"`
+	DemoEnd      float64   `json:"demoEnd"`
+	CategoryIDs  []string  `json:"categoryIds"`
+	TJAName      string    `json:"tjaName"`
+	AudioName    string    `json:"audioName"`
+	TJAHash      string    `json:"tjaHash"`
+	TJASize      int64     `json:"tjaSize"`
+	AudioHash    string    `json:"audioHash"`
+	AudioSize    int64     `json:"audioSize"`
+	CoverHash    string    `json:"coverHash,omitempty"`
 	// HasFiles is false for a song registered without a TJA and audio (R038):
 	// it has no blocks, no duration, and the file fields are empty.
 	HasFiles bool   `json:"hasFiles"`
@@ -49,6 +55,8 @@ type Chart struct {
 const publishedChart = `c.status='published'`
 
 // playableChart is a published chart with files: what the game can play.
+const chartScoreSQL = `COALESCE((SELECT upvotes-downvotes FROM chart_stats WHERE chart_id=c.id),0)`
+
 const playableChart = publishedChart + ` AND c.tja_file IS NOT NULL`
 
 const chartSelect = `SELECT c.id,c.nijiiro_id,c.official_id,c.uploader_id,c.description,c.created_at,c.update_at,c.duration,c.demo_end,c.category_flags,
@@ -56,7 +64,8 @@ const chartSelect = `SELECT c.id,c.nijiiro_id,c.official_id,c.uploader_id,c.desc
  c.title,c.subtitle,c.bpm,c.offset_seconds,c.demo_start,COALESCE(af.sha256||'.'||af.extension,''),c.title_translations,c.subtitle_translations,
  (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',d.id,'course',d.course,'side',d.side,'level',d.level,'maker',d.maker,'branching',d.branching)
    ORDER BY array_position(ARRAY['Easy','Normal','Hard','Oni','Edit'],d.course),array_position(ARRAY['single','p1','p2'],d.side)),'[]'::jsonb)
-   FROM chart_difficulties d WHERE d.chart_id=c.id)
+   FROM chart_difficulties d WHERE d.chart_id=c.id),
+ COALESCE((SELECT upvotes FROM chart_stats WHERE chart_id=c.id),0),COALESCE((SELECT downvotes FROM chart_stats WHERE chart_id=c.id),0),COALESCE((SELECT comment_count FROM chart_stats WHERE chart_id=c.id),0)
  FROM charts c LEFT JOIN chart_resources tf ON tf.id=c.tja_file LEFT JOIN chart_resources af ON af.id=c.audio_file LEFT JOIN chart_resources cf ON cf.id=c.cover_file `
 
 func readChart(row pgx.Row) (Chart, error) {
@@ -65,8 +74,10 @@ func readChart(row pgx.Row) (Chart, error) {
 	var flags CategoryFlags
 	e := row.Scan(&c.ID, &c.NijiiroID, &c.OfficialID, &c.UploaderID, &c.Description, &c.CreatedAt, &c.UpdateAt, &c.Duration, &c.DemoEnd, &flags,
 		&c.TJAName, &c.AudioName, &c.TJAHash, &c.TJASize, &c.AudioHash, &c.AudioSize, &c.TJAKey, &c.AudioKey, &c.CoverHash, &c.CoverKey,
-		&c.Title, &c.Subtitle, &c.BPM, &c.Offset, &c.DemoStart, &c.Wave, &c.TitleTranslations, &c.SubtitleTranslations, &difficulties)
+		&c.Title, &c.Subtitle, &c.BPM, &c.Offset, &c.DemoStart, &c.Wave, &c.TitleTranslations, &c.SubtitleTranslations, &difficulties,
+		&c.Upvotes, &c.Downvotes, &c.CommentCount)
 	if e == nil {
+		c.Score = c.Upvotes - c.Downvotes
 		c.HasFiles = c.TJAKey != ""
 		c.CategoryIDs = flags.IDs()
 		e = json.Unmarshal(difficulties, &c.Difficulties)
@@ -259,8 +270,16 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, uploader string)
 		ordering = ` ORDER BY ` + stars + ` DESC NULLS LAST,c.id ASC`
 	case "updated":
 		ordering = ` ORDER BY c.update_at DESC,c.id DESC`
+	// As on Fanmade. Reddit's "hot": the vote score counts logarithmically
+	// against age, so every tenfold score keeps a chart as high as one 12.5 hours newer.
+	case "hot":
+		ordering = ` ORDER BY sign(` + chartScoreSQL + `)*log(greatest(abs(` + chartScoreSQL + `),1))+extract(epoch FROM c.created_at)/45000 DESC,c.created_at DESC,c.id DESC`
+	case "top":
+		ordering = ` ORDER BY ` + chartScoreSQL + ` DESC,c.created_at DESC,c.id DESC`
+	case "comments":
+		ordering = ` ORDER BY COALESCE((SELECT comment_count FROM chart_stats WHERE chart_id=c.id),0) DESC,c.created_at DESC,c.id DESC`
 	default:
-		problem(w, 400, "QUERY_INVALID", "顺序必须为 default / nijiiro / title / bpm / level / updated")
+		problem(w, 400, "QUERY_INVALID", "顺序必须为 default / nijiiro / title / bpm / level / updated / hot / top / comments")
 		return
 	}
 	number := keywordNumber(q)
@@ -304,6 +323,13 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	if e != nil {
 		internal(w, e)
 		return
+	}
+	if viewer := s.viewer(r); viewer != "" {
+		e = s.DB.QueryRow(r.Context(), `SELECT value FROM chart_votes WHERE chart_id=$1 AND user_id=$2`, c.ID, viewer).Scan(&c.MyVote)
+		if e != nil && !errors.Is(e, pgx.ErrNoRows) {
+			internal(w, e)
+			return
+		}
 	}
 	respond(w, 200, c)
 }

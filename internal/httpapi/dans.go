@@ -71,6 +71,12 @@ type DanCourse struct {
 	Owner     string          `json:"owner"`
 	CreatedAt time.Time       `json:"createdAt"`
 	UpdatedAt time.Time       `json:"updatedAt"`
+	// Votes and comments as on charts; MyVote is only filled on the detail page.
+	Score        int `json:"score"`
+	Upvotes      int `json:"upvotes"`
+	Downvotes    int `json:"downvotes"`
+	CommentCount int `json:"commentCount"`
+	MyVote       int `json:"myVote"`
 }
 
 type danRewards struct {
@@ -292,7 +298,7 @@ func (s *Server) checkDanTitles(ctx context.Context, w http.ResponseWriter, rewa
 	return false
 }
 
-const danColumns = `d.id,d.owner_id,d.title,d.color,d.official,d.exams,d.rewards,d.created_at,d.updated_at,d.code`
+const danColumns = `d.id,d.owner_id,d.title,d.color,d.official,d.exams,d.rewards,d.created_at,d.updated_at,d.code,d.upvotes,d.downvotes,d.comment_count`
 
 // loadDans reads courses (where: a condition on dan_courses d) with their songs as they are now.
 func (s *Server) loadDans(ctx context.Context, where string, args ...any) ([]DanCourse, error) {
@@ -306,11 +312,11 @@ func (s *Server) loadDans(ctx context.Context, where string, args ...any) ([]Dan
 		var c DanCourse
 		var id int64
 		var title, exams, rewards []byte
-		if err = rows.Scan(&id, &c.OwnerID, &title, &c.Color, &c.Official, &exams, &rewards, &c.CreatedAt, &c.UpdatedAt, &c.Code); err != nil {
+		if err = rows.Scan(&id, &c.OwnerID, &title, &c.Color, &c.Official, &exams, &rewards, &c.CreatedAt, &c.UpdatedAt, &c.Code, &c.Upvotes, &c.Downvotes, &c.CommentCount); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		c.Format, c.ID, c.Exams, c.Rewards, c.Songs = 1, strconv.FormatInt(id, 10), exams, rewards, []DanSong{}
+		c.Format, c.ID, c.Exams, c.Rewards, c.Songs, c.Score = 1, strconv.FormatInt(id, 10), exams, rewards, []DanSong{}, c.Upvotes-c.Downvotes
 		json.Unmarshal(title, &c.Title)
 		index[c.ID] = len(courses)
 		courses = append(courses, c)
@@ -388,6 +394,13 @@ func (s *Server) danDetail(w http.ResponseWriter, r *http.Request) {
 	if len(courses) == 0 {
 		problem(w, 404, "DAN_NOT_FOUND", "段位不存在")
 		return
+	}
+	if viewer := s.viewer(r); viewer != "" {
+		err = s.DB.QueryRow(r.Context(), `SELECT value FROM dan_votes WHERE dan_id=$1 AND user_id=$2`, id, viewer).Scan(&courses[0].MyVote)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			internal(w, err)
+			return
+		}
 	}
 	respond(w, 200, courses[0])
 }
