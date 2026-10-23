@@ -291,6 +291,15 @@ export function DanPage() {
           <CardDescription>
             {t('dans.by', { owner: dan.owner || t('dans.unknownOwner') })}
           </CardDescription>
+          <p className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">{t('dans.code')}</span>
+            <code className="rounded-md bg-muted px-2 py-0.5 font-mono text-base tracking-[0.2em]">
+              {dan.code}
+            </code>
+            {!dan.official && (
+              <span className="text-xs text-muted-foreground">{t('dans.codeExplained')}</span>
+            )}
+          </p>
         </CardHeader>
         <CardContent className="space-y-6">
           {dan.songs.some((s) => !s.available) && <Notice>{t('dans.unavailableExplained')}</Notice>}
@@ -546,6 +555,7 @@ export function DanEditorPage() {
   const navigate = useNavigate()
   const [titles, setTitles] = useState<Record<string, string>>({ ja: '' })
   const [color, setColor] = useState(0)
+  const [code, setCode] = useState('')
   const [songs, setSongs] = useState<SongSlot[]>([])
   const [exams, setExams] = useState<ExamRow[]>([
     { type: 'gauge', range: 'more', perSong: false, values: [['100', '']] },
@@ -566,6 +576,7 @@ export function DanEditorPage() {
         setMade({ owner: dan.ownerId, official: dan.official })
         setTitles(dan.title)
         setColor(dan.color)
+        setCode(dan.code)
         setExams(toExamRows(dan.exams, dan.songs.length))
         setRewardDan(dan.rewards.dan === undefined ? 'none' : String(dan.rewards.dan))
         setRewardTitles(dan.rewards.titles ?? [])
@@ -625,6 +636,7 @@ export function DanEditorPage() {
     const body: DanInput = {
       title: Object.fromEntries(Object.entries(titles).filter(([, v]) => v.trim())),
       color,
+      ...(!id && code.trim() ? { code: code.trim().toUpperCase() } : {}),
       songs: songs.map((s) => ({ chartId: s.chartId, course: s.course, hidden: s.hidden })),
       exams: fromExamRows(exams, songs.length),
       rewards: {
@@ -684,6 +696,25 @@ export function DanEditorPage() {
               icon: <ColorSwatch hex={c.hex} />,
             }))}
           />
+          <div className="space-y-2">
+            <Label htmlFor="dan-code">{t('dans.code')}</Label>
+            <Input
+              id="dan-code"
+              value={code}
+              readOnly={!!id}
+              maxLength={6}
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
+              pattern="[A-Za-z0-9]{6}"
+              placeholder={id ? '' : t('dans.codePlaceholder')}
+              className="font-mono uppercase tracking-[0.2em]"
+              onChange={(e) => setCode(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+            />
+            <p className="text-xs text-muted-foreground">
+              {id ? t('dans.codeFixed') : t('dans.codeHint')}
+            </p>
+          </div>
         </CardContent>
       </Card>
       <Card className="rounded-3xl">
