@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"ourtaiko.dev/database/api/internal/audio"
@@ -254,6 +253,5 @@ func (s *Server) resourceLinks(w http.ResponseWriter, r *http.Request) {
 		internal(w, e)
 		return
 	}
-	respond(w, 200, map[string]any{"chartId": c.ID, "urlsExpire": false, "expiresAt": time.Now().UTC().Add(15 * time.Minute),
-		"resources": map[string]resourceLink{"tja": tjaLink, "audio": audioLink}})
+	respond(w, 200, map[string]any{"chartId": c.ID, "urlsExpire": false, "resources": map[string]resourceLink{"tja": tjaLink, "audio": audioLink}})
 }
