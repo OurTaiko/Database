@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"log"
 	"net/http"
 	"net/netip"
@@ -23,8 +24,10 @@ import (
 
 type Config struct {
 	Origin, Storage string
-	Objects         objectstore.Store
-	CookieSecure    bool
+	// Site is the built website; nil serves the API alone.
+	Site         fs.FS
+	Objects      objectstore.Store
+	CookieSecure bool
 	// SSO is nil when no account center is configured; sign-in is then
 	// unavailable unless DevUserID is set.
 	SSO *SSOClient
@@ -152,6 +155,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/playlists/{id}/order", s.orderPlaylist)
 	mux.HandleFunc("PUT /api/v1/playlists/{id}/favorite", s.favoritePlaylist)
 	mux.HandleFunc("DELETE /api/v1/playlists/{id}/favorite", s.unfavoritePlaylist)
+	mux.HandleFunc("/", s.site)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Request-ID", ID())
 		w.Header().Set("X-Content-Type-Options", "nosniff")

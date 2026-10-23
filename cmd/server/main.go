@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	webapp "ourtaiko.dev/database/api"
 	"ourtaiko.dev/database/api/internal/database"
 	"ourtaiko.dev/database/api/internal/httpapi"
 	"ourtaiko.dev/database/api/internal/objectstore"
@@ -113,13 +114,17 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	app := httpapi.New(pool, httpapi.Config{Profile: profile, SSO: sso, DevUserID: devUser, TrustedProxies: proxies, Origin: env("APP_ORIGIN", "http://127.0.0.1:5174"), Storage: storage, Objects: objects, CookieSecure: env("COOKIE_SECURE", "false") == "true"})
+	site := webapp.Site()
+	if site == nil {
+		log.Print("website not built: run pnpm build in web; serving API only")
+	}
+	app := httpapi.New(pool, httpapi.Config{Site: site, Profile: profile, SSO: sso, DevUserID: devUser, TrustedProxies: proxies, Origin: env("APP_ORIGIN", "http://127.0.0.1:5174"), Storage: storage, Objects: objects, CookieSecure: env("COOKIE_SECURE", "false") == "true"})
 	if err = app.EnsureStorage(); err != nil {
 		log.Fatal(err)
 	}
 	srv := &http.Server{Addr: listen, Handler: app.Handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 180 * time.Second, WriteTimeout: 240 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	go func() {
-		log.Printf("OurTaikoDatabase API listening on http://%s", srv.Addr)
+		log.Printf("OurTaikoDatabase listening on http://%s", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}

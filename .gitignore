@@ -1,5 +1,6 @@
 node_modules/
-dist/
+/web/dist/*
+!/web/dist/.gitkeep
 .env
 .env.local
 .DS_Store
@@ -9,5 +10,5 @@ test-results/
 .data/
 bin/
 *.log
-.env.*
-!.env.example
+/.env.*
+!/.env.example
