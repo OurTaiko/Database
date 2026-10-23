@@ -10,20 +10,30 @@ exec 9>"$(git rev-parse --git-path database-publish.lock)"
 flock -n 9 || { echo 'Another OurTaikoDatabase deployment is running'; exit 1; }
 test -z "$(git status --porcelain)" || { echo 'OurTaikoDatabase checkout has local changes'; exit 1; }
 test "$(git branch --show-current)" = main || { echo 'OurTaikoDatabase checkout must be on main'; exit 1; }
-git fetch --no-tags "$remote" main
-latest=$(git rev-parse FETCH_HEAD)
-revision=${DEPLOY_REVISION:-$latest}
-if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
-  echo 'DEPLOY_REVISION must be a full Git commit SHA'
-  exit 1
+if [ "${DEPLOY_ROLLBACK:-}" = true ]; then
+  # A rollback reloads an archived image (rollback.yml); the checkout, and
+  # with it the Compose file, stays at the current main.
+  revision=${DEPLOY_REVISION:-}
+  if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]] || [ -z "${DEPLOY_IMAGE_ARCHIVE:-}" ]; then
+    echo 'A rollback needs DEPLOY_REVISION and DEPLOY_IMAGE_ARCHIVE'
+    exit 1
+  fi
+else
+  git fetch --no-tags "$remote" main
+  latest=$(git rev-parse FETCH_HEAD)
+  revision=${DEPLOY_REVISION:-$latest}
+  if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+    echo 'DEPLOY_REVISION must be a full Git commit SHA'
+    exit 1
+  fi
+  # A queued or manually re-run workflow must never publish an older commit.
+  if [ "$revision" != "$latest" ]; then
+    echo "Skipping superseded OurTaikoDatabase revision $revision; main is now $latest"
+    exit 0
+  fi
+  git merge --ff-only "$revision"
+  test "$(git rev-parse HEAD)" = "$revision" || { echo 'OurTaikoDatabase checkout differs from requested revision'; exit 1; }
 fi
-# A queued or manually re-run workflow must never publish an older commit.
-if [ "$revision" != "$latest" ]; then
-  echo "Skipping superseded OurTaikoDatabase revision $revision; main is now $latest"
-  exit 0
-fi
-git merge --ff-only "$revision"
-test "$(git rev-parse HEAD)" = "$revision" || { echo 'OurTaikoDatabase checkout differs from requested revision'; exit 1; }
 # Build both halves from the same commit before replacing the running service.
 export DATABASE_SOURCE_DIR="$PWD"
 compose="$PWD/deploy/compose.production.yml"
@@ -47,3 +57,10 @@ if [ -n "$archive" ]; then
   rm -f -- "$archive"
   rmdir -- "$(dirname "$archive")"
 fi
+# Rollback images are kept in ourtaiko-private (database/images/<commit>.tar.gz),
+# not here: drop every other local tag; Docker deletes an image with its last tag.
+sudo -n docker image ls ourtaiko-database --format '{{.Tag}}' | while read -r tag; do
+  if [ "$tag" != release ] && [ "$tag" != "$revision" ] && [ "$tag" != '<none>' ]; then
+    sudo -n docker image rm "ourtaiko-database:$tag" >/dev/null || true
+  fi
+done
