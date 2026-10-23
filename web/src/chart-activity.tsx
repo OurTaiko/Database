@@ -53,7 +53,9 @@ export function ChartActivity({ chart }: { chart: Chart }) {
   const [attempt, setAttempt] = useState(0)
   const groups = groupCourses(chart.difficulties)
   const group = groups.find((g) => g.base === baseCourse(course))
-  const { id, tjaHash } = chart
+  const { id } = chart
+  // Reload the text when any block changed (the file behind it did).
+  const blockHashes = chart.difficulties.map((d) => d.chartHash ?? '').join(',')
   // The image and the player name the chart as the database does (R042).
   const titled = useMemo(() => (source ? withChartTitles(source, chart) : ''), [source, chart])
   useEffect(() => {
@@ -81,7 +83,7 @@ export function ChartActivity({ chart }: { chart: Chart }) {
     }
     void load()
     return () => controller.abort()
-  }, [id, tjaHash, attempt])
+  }, [id, blockHashes, attempt])
   const status =
     'flex min-h-40 flex-col items-center justify-center gap-3 py-6 text-center text-sm text-muted-foreground'
   return (

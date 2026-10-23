@@ -38,11 +38,13 @@ type Chart struct {
 	CategoryIDs  []string  `json:"categoryIds"`
 	TJAName      string    `json:"tjaName"`
 	AudioName    string    `json:"audioName"`
-	TJAHash      string    `json:"tjaHash"`
-	TJASize      int64     `json:"tjaSize"`
-	AudioHash    string    `json:"audioHash"`
-	AudioSize    int64     `json:"audioSize"`
-	CoverHash    string    `json:"coverHash,omitempty"`
+	// The stored file's hash: object key and download check, not the chart's identity (that is
+	// each block's chartHash). Not in the JSON; the resource manifest carries it as sha256.
+	TJAHash   string `json:"-"`
+	TJASize   int64  `json:"tjaSize"`
+	AudioHash string `json:"audioHash"`
+	AudioSize int64  `json:"audioSize"`
+	CoverHash string `json:"coverHash,omitempty"`
 	// HasFiles is false for a song registered without a TJA and audio (R038):
 	// it has no blocks, no duration, and the file fields are empty.
 	HasFiles bool   `json:"hasFiles"`
@@ -62,7 +64,7 @@ const playableChart = publishedChart + ` AND c.tja_file IS NOT NULL`
 const chartSelect = `SELECT c.id,c.nijiiro_id,c.official_id,c.uploader_id,c.description,c.created_at,c.update_at,c.duration,c.demo_end,c.category_flags,
  COALESCE(tf.original_filename,''),COALESCE(af.original_filename,''),COALESCE(tf.sha256,''),COALESCE(tf.byte_size,0),COALESCE(af.sha256,''),COALESCE(af.byte_size,0),COALESCE(tf.storage_key,''),COALESCE(af.storage_key,''),COALESCE(cf.sha256,''),COALESCE(cf.storage_key,''),
  c.title,c.subtitle,c.bpm,c.offset_seconds,c.demo_start,COALESCE(af.sha256||'.'||af.extension,''),c.title_translations,c.subtitle_translations,
- (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',d.id,'course',d.course,'side',d.side,'level',d.level,'maker',d.maker,'branching',d.branching)
+ (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',d.id,'course',d.course,'side',d.side,'level',d.level,'maker',d.maker,'branching',d.branching,'chartHash',d.content_hash)
    ORDER BY array_position(ARRAY['Easy','Normal','Hard','Oni','Edit'],d.course),array_position(ARRAY['single','p1','p2'],d.side)),'[]'::jsonb)
    FROM chart_difficulties d WHERE d.chart_id=c.id),
  COALESCE((SELECT upvotes FROM chart_stats WHERE chart_id=c.id),0),COALESCE((SELECT downvotes FROM chart_stats WHERE chart_id=c.id),0),COALESCE((SELECT comment_count FROM chart_stats WHERE chart_id=c.id),0)

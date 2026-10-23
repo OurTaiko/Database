@@ -16,9 +16,11 @@ import (
 
 	"github.com/joho/godotenv"
 	webapp "ourtaiko.dev/database/api"
+	"ourtaiko.dev/database/api/internal/charthash"
 	"ourtaiko.dev/database/api/internal/database"
 	"ourtaiko.dev/database/api/internal/httpapi"
 	"ourtaiko.dev/database/api/internal/objectstore"
+	"ourtaiko.dev/database/api/internal/tja"
 )
 
 func env(key, fallback string) string {
@@ -118,6 +120,18 @@ func main() {
 	if site == nil {
 		log.Print("website not built: run pnpm build in web; serving API only")
 	}
+	// TJAParser reads chart bodies for every upload and the content-hash backfill; a missing
+	// or broken tool is a deployment error, found now rather than at the first upload.
+	tja.Inspector = charthash.CLI{Bin: env("TJAPARSER_BIN", "tjaparser")}
+	tja.InspectDir = storage
+	// Its own deadline: the start-up context above is not for this.
+	toolCtx, cancelTool := context.WithTimeout(context.Background(), 30*time.Second)
+	version, err := tja.Inspector.(charthash.CLI).Version(toolCtx)
+	cancelTool()
+	if err != nil {
+		log.Fatalf("tjaparser is not usable: %v", err)
+	}
+	log.Printf("tjaparser hash algorithm %s", version)
 	app := httpapi.New(pool, httpapi.Config{Site: site, Profile: profile, SSO: sso, DevUserID: devUser, TrustedProxies: proxies, Origin: env("APP_ORIGIN", "http://127.0.0.1:5174"), Storage: storage, Objects: objects, CookieSecure: env("COOKIE_SECURE", "false") == "true"})
 	if err = app.EnsureStorage(); err != nil {
 		log.Fatal(err)
@@ -125,6 +139,7 @@ func main() {
 	background, stopBackground := context.WithCancel(context.Background())
 	defer stopBackground()
 	go app.RunNotificationPrune(background)
+	go app.RunContentHashBackfill(background)
 	srv := &http.Server{Addr: listen, Handler: app.Handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 180 * time.Second, WriteTimeout: 240 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	go func() {
 		log.Printf("OurTaikoDatabase listening on http://%s", srv.Addr)

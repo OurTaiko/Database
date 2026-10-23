@@ -52,7 +52,7 @@ func TestTitleEditsKeepTheStoredTJA(t *testing.T) {
 		t.Fatal("title edit", code)
 	}
 	// The translations are their own: the English one does not follow the title.
-	if chart.Title != "Edited" || chart.Subtitle != "Someone" || chart.BPM != 150 || chart.TJAHash != tjaHash ||
+	if chart.Title != "Edited" || chart.Subtitle != "Someone" || chart.BPM != 150 ||
 		chart.TitleTranslations["en"] != "Stored" || chart.TitleTranslations["zh"] != "改名" {
 		t.Fatalf("after edit: %q %q %v %s %v", chart.Title, chart.Subtitle, chart.BPM, chart.TJAHash, chart.TitleTranslations)
 	}

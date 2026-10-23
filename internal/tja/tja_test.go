@@ -37,9 +37,13 @@ func TestParseAcceptsSingleAndDoubleBlocksTogether(t *testing.T) {
 	if m.Title != "Song" || m.BPM != 120 || m.Offset != -1.5 || m.DemoStart != 30 || m.Wave != "Song.ogg" {
 		t.Fatalf("unexpected headers: %+v", m)
 	}
-	// An empty translation is not a translation; English defaults to the title.
-	if _, ok := m.TitleTranslations["ko"]; ok || m.TitleTranslations["ja"] != "曲" || m.TitleTranslations["en"] != "Song" {
+	// The dictionary is the file's: "origin" is TITLE itself, "en" only when written; an empty
+	// TITLEKO stays as the file wrote it (the clients skip blank values).
+	if m.TitleTranslations["origin"] != "Song" || m.TitleTranslations["ja"] != "曲" || m.TitleTranslations["ko"] != "" {
 		t.Fatalf("translations = %v", m.TitleTranslations)
+	}
+	if _, ok := m.TitleTranslations["en"]; ok {
+		t.Fatal("en is not defaulted from TITLE any more")
 	}
 }
 

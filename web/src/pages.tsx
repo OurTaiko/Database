@@ -539,7 +539,10 @@ export function Detail() {
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0">
           {chart.hasFiles ? (
-            <ChartActivity key={`${chart.id}:${chart.tjaHash}`} chart={chart} />
+            <ChartActivity
+              key={`${chart.id}:${chart.difficulties.map((d) => d.chartHash ?? '').join(',')}`}
+              chart={chart}
+            />
           ) : (
             <section
               className={cn(
@@ -621,7 +624,9 @@ export function Detail() {
             <dl className="space-y-3 text-sm [&_dt]:text-muted-foreground">
               {(chart.hasFiles
                 ? ([
-                    ['TJA', chart.tjaName, chart.tjaHash, chart.tjaSize, 'tja'],
+                    // The TJA's own hash is not published any more: its blocks' chartHash are the
+                    // chart's identity, and the download checks the resource manifest's sha256.
+                    ['TJA', chart.tjaName, '', chart.tjaSize, 'tja'],
                     [t('db.audio'), chart.audioName, chart.audioHash, chart.audioSize, 'audio'],
                   ] as const)
                 : []
@@ -638,9 +643,11 @@ export function Detail() {
                       {name}
                     </a>
                   </dd>
-                  <dd className="font-mono text-xs break-all text-muted-foreground" title="SHA-256">
-                    {hash}
-                  </dd>
+                  {hash && (
+                    <dd className="font-mono text-xs break-all text-muted-foreground" title="SHA-256">
+                      {hash}
+                    </dd>
+                  )}
                 </div>
               ))}
             </dl>
