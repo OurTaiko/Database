@@ -10,6 +10,7 @@ import { endpoints } from '@/api/endpoints'
 import { api, jsonRequest } from './api/client'
 import type { Chart, Locale } from './api/types'
 import { CategoryPicker } from './categories'
+import { cn } from '@/lib/utils'
 import { Modal } from './notifications'
 
 const locales: Locale[] = ['ja', 'en', 'zh', 'ko']
@@ -35,9 +36,10 @@ export function parseBpm(value: string): number | null | undefined {
   return Number.isFinite(n) && n > 0 && n <= 10000 ? n : undefined
 }
 
-// Edits what the database says about a chart. The stored TJA and audio, and
-// with them the title, BPM and difficulties, are not changed here; a song
-// registered without files has no TJA, so those are editable then.
+// Edits what the database says about a chart. The stored TJA and audio are not
+// changed here. The title and subtitle are the database's at any time (R042);
+// the BPM and difficulties are the TJA's, so the BPM is editable only on a song
+// registered without files.
 export function EditMetadata({
   chart,
   csrf,
@@ -70,7 +72,7 @@ export function EditMetadata({
       return
     }
     const parsedBpm = parseBpm(bpm)
-    if (!chart.hasFiles && (!title.trim() || parsedBpm === undefined)) {
+    if (!title.trim() || (!chart.hasFiles && parsedBpm === undefined)) {
       setError(t('db.songFieldsInvalid'))
       return
     }
@@ -85,10 +87,10 @@ export function EditMetadata({
           jsonRequest(
             'PATCH',
             {
-              // The title, subtitle and BPM are the TJA's once a chart has files.
-              ...(chart.hasFiles
-                ? {}
-                : { title: title.trim(), subtitle: subtitle.trim(), bpm: parsedBpm }),
+              title: title.trim(),
+              subtitle: subtitle.trim(),
+              // The BPM is the TJA's once a chart has files.
+              ...(chart.hasFiles ? {} : { bpm: parsedBpm }),
               nijiiroId: nijiiro,
               officialId: official || null,
               categoryIds,
@@ -115,29 +117,34 @@ export function EditMetadata({
       className="sm:max-w-2xl"
     >
       <form className="space-y-5" onSubmit={submit}>
-        {!chart.hasFiles && (
-          <div className="grid gap-4 sm:grid-cols-[1fr_1fr_8rem]">
-            <div className="space-y-2">
-              <Label htmlFor="edit-title">{t('db.songTitle')}</Label>
-              <Input
-                id="edit-title"
-                value={title}
-                maxLength={500}
-                required
-                disabled={busy}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-subtitle">{t('db.songSubtitle')}</Label>
-              <Input
-                id="edit-subtitle"
-                value={subtitle}
-                maxLength={500}
-                disabled={busy}
-                onChange={(e) => setSubtitle(e.target.value)}
-              />
-            </div>
+        <div
+          className={cn(
+            'grid gap-4',
+            chart.hasFiles ? 'sm:grid-cols-2' : 'sm:grid-cols-[1fr_1fr_8rem]',
+          )}
+        >
+          <div className="space-y-2">
+            <Label htmlFor="edit-title">{t('db.songTitle')}</Label>
+            <Input
+              id="edit-title"
+              value={title}
+              maxLength={500}
+              required
+              disabled={busy}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-subtitle">{t('db.songSubtitle')}</Label>
+            <Input
+              id="edit-subtitle"
+              value={subtitle}
+              maxLength={500}
+              disabled={busy}
+              onChange={(e) => setSubtitle(e.target.value)}
+            />
+          </div>
+          {!chart.hasFiles && (
             <div className="space-y-2">
               <Label htmlFor="edit-bpm">BPM</Label>
               <Input
@@ -148,8 +155,8 @@ export function EditMetadata({
                 onChange={(e) => setBpm(e.target.value)}
               />
             </div>
-          </div>
-        )}
+          )}
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="edit-nijiiro-id">{t('db.nijiiroId')}</Label>

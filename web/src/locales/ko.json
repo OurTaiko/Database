@@ -462,7 +462,7 @@
     "NOTIFICATION_KIND_INVALID": "알 수 없는 알림 유형입니다.",
     "PREVIEW_RANGE_INVALID": "미리듣기 범위가 잘못되었습니다. 시작은 오디오 범위 안이어야 하고 끝은 시작보다 뒤여야 합니다.",
     "CHART_FILES_CHANGED": "곡 파일이 다른 업데이트로 교체되었습니다. 곡 페이지를 다시 열고 업로드하세요.",
-    "METADATA_LOCKED": "채보 파일이 있으면 곡명, 부제, BPM은 TJA를 따르므로 여기서 수정할 수 없습니다.",
+    "METADATA_LOCKED": "채보 파일이 있으면 BPM은 TJA를 따르므로 여기서 수정할 수 없습니다.",
     "CHART_FILES_MISSING": "이 곡에는 아직 채보 파일이 없습니다.",
     "LAST_OWNER": "유일한 소유자이므로 포기할 수 없습니다. 필요 없다면 작품을 삭제하세요.",
     "PLAYLIST_LIMIT": "플레이리스트는 최대 100개까지 만들 수 있습니다.",

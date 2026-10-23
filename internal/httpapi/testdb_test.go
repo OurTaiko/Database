@@ -182,3 +182,15 @@ func (c testClient) do(user, method, path, body string, out any) int {
 	}
 	return w.Code
 }
+
+// raw sends a GET as the given user and returns the status and body unparsed.
+func (c testClient) raw(user, path string) (int, []byte) {
+	c.t.Helper()
+	r := httptest.NewRequest("GET", path, nil)
+	if user != "" {
+		r.AddCookie(&http.Cookie{Name: "ourtaiko_db_session", Value: c.tokens[user]})
+	}
+	w := httptest.NewRecorder()
+	c.handler.ServeHTTP(w, r)
+	return w.Code, w.Body.Bytes()
+}

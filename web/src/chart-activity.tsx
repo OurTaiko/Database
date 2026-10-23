@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { endpoints } from '@/api/endpoints'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import {
   FileAudioIcon as FileMusic,
   GitBranchIcon,
@@ -18,6 +18,7 @@ import { Notice } from './notifications'
 import { defaultDifficulty } from './chart-difficulty'
 import { maxTja } from './tja'
 import { ChartLeaderboard } from './chart-leaderboard'
+import { withChartTitles } from './tja-titles'
 
 const ChartPreview = lazy(() => import('./chart-preview'))
 const EmbeddedPlayer = lazy(() => import('./embedded-player'))
@@ -53,6 +54,8 @@ export function ChartActivity({ chart }: { chart: Chart }) {
   const groups = groupCourses(chart.difficulties)
   const group = groups.find((g) => g.base === baseCourse(course))
   const { id, tjaHash } = chart
+  // The image and the player name the chart as the database does (R042).
+  const titled = useMemo(() => (source ? withChartTitles(source, chart) : ''), [source, chart])
   useEffect(() => {
     const controller = new AbortController()
     setSource('')
@@ -197,7 +200,7 @@ export function ChartActivity({ chart }: { chart: Chart }) {
                     </p>
                   }
                 >
-                  <ChartPreview key={course} chart={chart} source={source} course={course} />
+                  <ChartPreview key={course} chart={chart} source={titled} course={course} />
                 </Suspense>
               )}
             </TabsContent>
@@ -210,7 +213,7 @@ export function ChartActivity({ chart }: { chart: Chart }) {
                     </p>
                   }
                 >
-                  <EmbeddedPlayer chart={chart} source={source} course={course} />
+                  <EmbeddedPlayer chart={chart} source={titled} course={course} />
                 </Suspense>
               )}
             </TabsContent>

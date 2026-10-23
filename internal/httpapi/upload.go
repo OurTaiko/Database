@@ -578,8 +578,10 @@ func patchTranslations(raw json.RawMessage, dst map[string]string) bool {
 }
 
 // editMetadata changes the database's own description of a chart; the stored
-// TJA and audio are untouched. Omitted fields keep their value. The title,
-// subtitle and BPM of a song without files are the database's own too.
+// TJA and audio are untouched. Omitted fields keep their value. The title and
+// subtitle can be changed at any time (R042): pages, packages and the game use
+// these, and put them into the TJA headers they hand out. The BPM is the TJA's
+// and can be set only on a song registered without files.
 func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 	_, c, ok := s.managed(w, r)
 	if !ok {
@@ -591,11 +593,11 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	isNull := func(raw json.RawMessage) bool { return bytes.Equal(bytes.TrimSpace(raw), []byte("null")) }
 	title, subtitle, bpm := c.Title, c.Subtitle, c.BPM
+	if len(patch.BPM) > 0 && c.HasFiles {
+		problem(w, 422, "METADATA_LOCKED", "有谱面文件时，BPM 来自 TJA，不能在此修改")
+		return
+	}
 	if len(patch.Title) > 0 || len(patch.Subtitle) > 0 || len(patch.BPM) > 0 {
-		if c.HasFiles {
-			problem(w, 422, "METADATA_LOCKED", "有谱面文件时，曲名、副标题和 BPM 来自 TJA，不能在此修改")
-			return
-		}
 		if len(patch.Title) > 0 {
 			if json.Unmarshal(patch.Title, &title) != nil || isNull(patch.Title) {
 				problem(w, 422, "METADATA_INVALID", "曲名必须为文本")

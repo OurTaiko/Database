@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"archive/zip"
+	"bytes"
 	"errors"
 	"io"
 	"mime"
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"ourtaiko.dev/database/api/internal/audio"
 	"ourtaiko.dev/database/api/internal/objectstore"
+	"ourtaiko.dev/database/api/internal/tja"
 )
 
 // publishedFile resolves one file role of a published chart without the
@@ -96,7 +98,8 @@ func (s *Server) getCover(w http.ResponseWriter, r *http.Request) {
 	s.serveObject(w, r, key, "cover.webp", digest, "image/webp", "inline")
 }
 
-// downloadPackage builds a ZIP per request from the stored TJA and audio. The
+// downloadPackage builds a ZIP per request from the stored TJA, with the
+// database's title and subtitle in its headers, and the stored audio. The
 // audio keeps its content-addressed name, which is what the stored TJA's WAVE
 // declares (R007).
 func (s *Server) downloadPackage(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +125,14 @@ func (s *Server) downloadPackage(w http.ResponseWriter, r *http.Request) {
 		internal(w, e)
 		return
 	}
-	defer tf.Close()
+	stored, e := io.ReadAll(io.LimitReader(tf, tja.MaxTJA+1))
+	tf.Close()
+	if e != nil {
+		internal(w, e)
+		return
+	}
+	// The package names the chart as the database does (R042).
+	chartText := tja.WithTitles(stored, c.Title, c.Subtitle, c.TitleTranslations, c.SubtitleTranslations)
 	af, e := s.Config.Objects.Open(r.Context(), c.AudioKey)
 	if e != nil {
 		internal(w, e)
@@ -135,7 +145,7 @@ func (s *Server) downloadPackage(w http.ResponseWriter, r *http.Request) {
 	for _, f := range []struct {
 		name string
 		file io.Reader
-	}{{c.TJAName, tf}, {c.Wave, af}} {
+	}{{c.TJAName, bytes.NewReader(chartText)}, {c.Wave, af}} {
 		dst, e := z.CreateHeader(&zip.FileHeader{Name: f.name, Method: zip.Store})
 		if e != nil {
 			return

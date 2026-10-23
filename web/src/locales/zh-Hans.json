@@ -462,7 +462,7 @@
     "NOTIFICATION_KIND_INVALID": "未知的通知类型",
     "PREVIEW_RANGE_INVALID": "试听范围无效：起点必须位于音频范围内，终点须晚于起点。",
     "CHART_FILES_CHANGED": "歌曲文件已被其他更新替换，请重新打开歌曲页面后上传。",
-    "METADATA_LOCKED": "有谱面文件时，曲名、副标题和 BPM 来自 TJA，不能在此修改。",
+    "METADATA_LOCKED": "有谱面文件时，BPM 来自 TJA，不能在此修改。",
     "CHART_FILES_MISSING": "该乐曲尚未上传谱面文件。",
     "LAST_OWNER": "你是唯一的所有者，不能放弃；如不再需要可以删除作品。",
     "PLAYLIST_LIMIT": "每位用户最多创建 100 个歌单。",

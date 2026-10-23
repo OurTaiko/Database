@@ -465,7 +465,7 @@
     "NOTIFICATION_KIND_INVALID": "Unknown notification type.",
     "PREVIEW_RANGE_INVALID": "The preview range is invalid: it must start inside the audio and end after it starts.",
     "CHART_FILES_CHANGED": "The song files were replaced by another update. Reopen the song page and upload again.",
-    "METADATA_LOCKED": "With chart files present, the title, subtitle and BPM come from the TJA and cannot be edited here.",
+    "METADATA_LOCKED": "With chart files present, the BPM comes from the TJA and cannot be edited here.",
     "CHART_FILES_MISSING": "This song has no chart files yet.",
     "LAST_OWNER": "You are the only owner and cannot give up the chart. Delete it if you no longer want it.",
     "PLAYLIST_LIMIT": "You can create up to 100 playlists.",
