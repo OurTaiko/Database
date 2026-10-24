@@ -5,11 +5,10 @@ import { i18n } from './i18n'
 import { StrictMode } from 'react'
 import { IconContext } from '@phosphor-icons/react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import { SessionProvider } from './session'
 import { Layout } from '@/components/layout'
-import { Auth, Detail, Library } from './pages'
-import { UploadPage } from './upload'
+import { Auth, ChartManagerPage, Detail, Library } from './pages'
 import { UsersPage } from './users'
 import { UserSpacePage } from './user-space'
 import { NotificationsPage } from './notification-center'
@@ -40,8 +39,12 @@ function App() {
                         <Route path="users/:id" element={<UserSpacePage />} />
                         <Route path="notifications" element={<NotificationsPage />} />
                         <Route path="me/profile" element={<ProfilePage />} />
-                        <Route path="me/charts" element={<Library mine />} />
-                        <Route path="upload" element={<UploadPage />} />
+                        <Route path="me/charts" element={<ChartManagerPage />} />
+                        <Route path="me/charts/publish" element={<ChartManagerPage />} />
+                        <Route
+                          path="upload"
+                          element={<Navigate to="/me/charts/publish" replace />}
+                        />
                         <Route path="charts/:id" element={<Detail />} />
                         <Route path="charts/:id/comments/:commentId" element={<Detail />} />
                         <Route path="charts/:id/edit" element={<ChartEditorPage />} />

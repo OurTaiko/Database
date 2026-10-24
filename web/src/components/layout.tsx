@@ -4,7 +4,6 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import {
   CompassIcon as Compass,
   FolderIcon as FolderHeart,
-  UploadSimpleIcon as Upload,
   SignOutIcon as LogOut,
   SignInIcon,
   UserIcon as UserRound,
@@ -37,7 +36,8 @@ export function Layout() {
 
   const session = useSession()
   const [error, setError] = useState('')
-  // The upload entry exists only for users holding the upload permission.
+  // Chart management (uploads and the upload form) exists only for users
+  // holding the upload permission.
   const links = [
     { to: '/', label: t('db.browse'), icon: Compass },
     { to: '/playlists', label: t('playlists.plaza'), icon: PlaylistIcon },
@@ -53,10 +53,7 @@ export function Layout() {
         ]
       : []),
     ...(session.user?.canUpload
-      ? [
-          { to: '/upload', label: t('db.upload'), icon: Upload },
-          { to: '/me/charts', label: t('db.myUploads'), icon: FolderHeart },
-        ]
+      ? [{ to: '/me/charts', label: t('db.chartManager'), icon: FolderHeart }]
       : []),
     ...(session.user ? [{ to: '/me/profile', label: t('messages.profile'), icon: UserRound }] : []),
   ]

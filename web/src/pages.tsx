@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 import { UserAvatar } from '@/components/user-avatar'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowRightIcon as ArrowRight,
   DownloadSimpleIcon as Download,
@@ -40,6 +40,8 @@ import { useNotification } from './notification-context'
 import { CategoryLabels } from './categories'
 import { cn } from '@/lib/utils'
 import { PageHero } from '@/components/page-hero'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { UploadPage } from './upload'
 import { EmptyState } from '@/components/empty-state'
 import { coverSource } from './cover'
 
@@ -272,8 +274,7 @@ export function Auth({ register = false }: { register?: boolean }) {
     </div>
   )
 }
-const detailCardClassName =
-  'rounded-[14px] border-2 border-outline bg-card p-6 shadow-drop'
+const detailCardClassName = 'rounded-[14px] border-2 border-outline bg-card p-6 shadow-drop'
 const manageItemClassName =
   'flex min-h-11 w-full items-center justify-between gap-3 text-left text-sm text-foreground transition-colors hover:text-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md'
 function formatBytes(bytes: number) {
@@ -356,10 +357,7 @@ export function Detail() {
           <ChartCover chart={chart} className="sm:row-span-3" />
           <div className="flex min-w-0 flex-col gap-1 self-center sm:gap-2 sm:self-start">
             <CategoryLabels ids={chart.categoryIds} />
-            <h1
-              id="chart-title"
-              className="text-xl font-extrabold wrap-anywhere sm:text-4xl"
-            >
+            <h1 id="chart-title" className="text-xl font-extrabold wrap-anywhere sm:text-4xl">
               {text.title}
             </h1>
             {text.subtitle && (
@@ -621,15 +619,15 @@ export function Detail() {
                     {label} · {formatBytes(size)}
                   </dt>
                   <dd className="wrap-anywhere">
-                    <a
-                      className="text-link hover:underline"
-                      href={endpoints.resource(chart, kind)}
-                    >
+                    <a className="text-link hover:underline" href={endpoints.resource(chart, kind)}>
                       {name}
                     </a>
                   </dd>
                   {hash && (
-                    <dd className="font-mono text-xs break-all text-muted-foreground" title="SHA-256">
+                    <dd
+                      className="font-mono text-xs break-all text-muted-foreground"
+                      title="SHA-256"
+                    >
                       {hash}
                     </dd>
                   )}
@@ -754,5 +752,34 @@ export function Detail() {
         </aside>
       </div>
     </div>
+  )
+}
+
+// My uploads and the upload form on one page: /me/charts lists the user's
+// uploads, /me/charts/publish uploads a new chart.
+export function ChartManagerPage() {
+  const { t } = useTranslation()
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const tab = pathname.replace(/\/$/, '').endsWith('/publish') ? 'publish' : 'charts'
+  return (
+    <>
+      <h1 className="font-extrabold text-2xl sm:text-3xl">{t('db.chartManager')}</h1>
+      <Tabs
+        value={tab}
+        onValueChange={(value) =>
+          navigate(value === 'publish' ? '/me/charts/publish' : '/me/charts')
+        }
+      >
+        <TabsList aria-label={t('db.chartManager')}>
+          <TabsTrigger value="charts">{t('db.myUploads')}</TabsTrigger>
+          <TabsTrigger value="publish">
+            <UploadSimpleIcon aria-hidden="true" />
+            {t('db.upload')}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {tab === 'publish' ? <UploadPage embedded /> : <Library mine embedded />}
+    </>
   )
 }

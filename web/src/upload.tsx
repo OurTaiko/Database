@@ -19,6 +19,7 @@ import { CoverPicker } from '@/components/cover-picker'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CategoryPicker } from './categories'
 import { uploadChart } from './api/client'
+import { EmptyState } from '@/components/empty-state'
 import { useNotification } from './notification-context'
 import { useSession } from './session-context'
 import { isAudioFilename, maxAudio, maxTja } from './tja'
@@ -29,9 +30,6 @@ function createRequestKey() {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
-const emptyStateClassName =
-  'flex flex-col items-center justify-center gap-4 rounded-[14px] border border-dashed bg-card/60 px-6 py-16 text-center [&>p]:max-w-lg [&>p]:text-muted-foreground'
-
 type UploadMode = 'files' | 'song'
 
 // Adds an official chart: a TJA, its audio and what identifies the song. The
@@ -39,7 +37,7 @@ type UploadMode = 'files' | 'song'
 // In song mode no files are sent: a song that is known but whose files are
 // not at hand is registered by its title, and its files are uploaded later
 // from its page.
-export function UploadPage() {
+export function UploadPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation()
   const { notify } = useNotification()
   const session = useSession(),
@@ -64,20 +62,19 @@ export function UploadPage() {
   // Only users holding the upload permission get the upload interface.
   if (!session.user?.canUpload)
     return (
-      <div className={emptyStateClassName}>
-        <h1 className="text-2xl font-extrabold sm:text-3xl">
-          {t('db.uploadUnavailable')}
-        </h1>
-        <p>{session.user ? t('db.uploadNeedsPermission') : t('db.uploadNeedsSignIn')}</p>
+      <EmptyState title={t('db.uploadUnavailable')}>
+        <p className="text-muted-foreground text-sm">
+          {session.user ? t('db.uploadNeedsPermission') : t('db.uploadNeedsSignIn')}
+        </p>
         {!session.user && (
           <Link
             className={buttonVariants({ variant: 'default', size: 'default' })}
-            to="/login?returnTo=/upload"
+            to="/login?returnTo=/me/charts/publish"
           >
             {t('messages.signIn')}
           </Link>
         )}
-      </div>
+      </EmptyState>
     )
   const choose = (kind: 'tja' | 'audio', file: File | null) => {
     requestKey.current = createRequestKey()
@@ -194,7 +191,9 @@ export function UploadPage() {
   return (
     <>
       <div className="[&_p]:mt-2 [&_p]:text-sm [&_p]:text-muted-foreground">
-        <h1 className="text-2xl font-extrabold sm:text-3xl">{t('db.uploadTitle')}</h1>
+        {!embedded && (
+          <h1 className="text-2xl font-extrabold sm:text-3xl">{t('db.uploadTitle')}</h1>
+        )}
         {mode === 'song' && <p>{t('db.songOnlyText')}</p>}
       </div>
       <Tabs
