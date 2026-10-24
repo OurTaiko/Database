@@ -30,7 +30,7 @@ function createRequestKey() {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 const emptyStateClassName =
-  'flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed bg-card/60 px-6 py-16 text-center [&>p]:max-w-lg [&>p]:text-muted-foreground'
+  'flex flex-col items-center justify-center gap-4 rounded-[14px] border border-dashed bg-card/60 px-6 py-16 text-center [&>p]:max-w-lg [&>p]:text-muted-foreground'
 
 type UploadMode = 'files' | 'song'
 
@@ -65,7 +65,7 @@ export function UploadPage() {
   if (!session.user?.canUpload)
     return (
       <div className={emptyStateClassName}>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        <h1 className="text-2xl font-extrabold sm:text-3xl">
           {t('db.uploadUnavailable')}
         </h1>
         <p>{session.user ? t('db.uploadNeedsPermission') : t('db.uploadNeedsSignIn')}</p>
@@ -162,7 +162,7 @@ export function UploadPage() {
   const fileTile = (kind: 'tja' | 'audio') => {
     const file = kind === 'tja' ? tja : audio
     return (
-      <Label className="flex min-w-0 flex-col items-start gap-3 rounded-2xl border p-4 [&>span]:w-full [&_small]:mt-1 [&_small]:block [&_small]:truncate [&_small]:text-muted-foreground">
+      <Label className="flex min-w-0 flex-col items-start gap-3 rounded-[14px] border p-4 [&>span]:w-full [&_small]:mt-1 [&_small]:block [&_small]:truncate [&_small]:text-muted-foreground">
         {kind === 'tja' ? <FileMusic size={24} /> : <AudioLines size={24} />}
         <span>
           <b>{kind === 'tja' ? t('messages.tjaChart') : t('messages.oggMp3Audio')}</b>
@@ -194,8 +194,8 @@ export function UploadPage() {
   return (
     <>
       <div className="[&_p]:mt-2 [&_p]:text-sm [&_p]:text-muted-foreground">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('db.uploadTitle')}</h1>
-        <p>{mode === 'song' ? t('db.songOnlyText') : t('db.uploadText')}</p>
+        <h1 className="text-2xl font-extrabold sm:text-3xl">{t('db.uploadTitle')}</h1>
+        {mode === 'song' && <p>{t('db.songOnlyText')}</p>}
       </div>
       <Tabs
         value={mode}
@@ -212,8 +212,8 @@ export function UploadPage() {
       </Tabs>
       <form className="space-y-6" onSubmit={submit}>
         {mode === 'song' ? (
-          <Card className="min-w-0 gap-4 border p-5 shadow-none ring-0 sm:p-6">
-            <h2 className="text-base font-semibold">{t('db.songInformation')}</h2>
+          <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
+            <h2 className="text-base font-extrabold">{t('db.songInformation')}</h2>
             <div className="grid gap-4 sm:grid-cols-[1fr_1fr_8rem]">
               <div className="space-y-2">
                 <Label htmlFor="upload-title">{t('db.songTitle')}</Label>
@@ -252,11 +252,11 @@ export function UploadPage() {
           </Card>
         ) : (
           <Card
-            className="min-w-0 gap-4 border p-5 shadow-none ring-0 sm:p-6"
+            className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6"
             onDragOver={(e) => e.preventDefault()}
             onDrop={drop}
           >
-            <h2 className="text-base font-semibold">{t('db.uploadFiles')}</h2>
+            <h2 className="text-base font-extrabold">{t('db.uploadFiles')}</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               {fileTile('tja')}
               {fileTile('audio')}
@@ -270,8 +270,8 @@ export function UploadPage() {
             <CoverPicker file={cover} onChange={setCover} disabled={busy} />
           </Card>
         )}
-        <Card className="min-w-0 gap-5 border p-5 shadow-none ring-0 sm:p-6">
-          <h2 className="text-base font-semibold">{t('db.record')}</h2>
+        <Card className="min-w-0 gap-5 border-[1.5px] border-border p-5 shadow-none sm:p-6">
+          <h2 className="text-base font-extrabold">{t('db.record')}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="upload-nijiiro-id">{t('db.nijiiroId')}</Label>

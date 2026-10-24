@@ -37,12 +37,11 @@ import { CommentSection, chartSubject } from './comments'
 import { VoteControl } from '@/components/vote-control'
 import { Modal, Notice } from './notifications'
 import { useNotification } from './notification-context'
-import { CategoryLabels, useCategories } from './categories'
+import { CategoryLabels } from './categories'
 import { cn } from '@/lib/utils'
+import { PageHero } from '@/components/page-hero'
+import { EmptyState } from '@/components/empty-state'
 import { coverSource } from './cover'
-
-const emptyStateClassName =
-  'flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed bg-card/60 px-6 py-16 text-center [&>p]:max-w-lg [&>p]:text-muted-foreground'
 
 export function Library({
   mine = false,
@@ -58,7 +57,6 @@ export function Library({
   const { t } = useTranslation()
   const [params, setParams] = useSearchParams(),
     { user, loading: authLoading } = useSession()
-  const { chartCount } = useCategories()
   const [data, setData] = useState<ChartList | null>(null),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(true)
@@ -122,16 +120,16 @@ export function Library({
   }, [mine, user, q, page, order, category, course, stars, nijiiro, files, uploader])
   if (mine && !user)
     return (
-      <div className={emptyStateClassName}>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('db.myUploads')}</h1>
-        <p>{authLoading ? t('messages.loadingAccount') : t('db.signInToSeeUploads')}</p>
-        {!authLoading && (
+      <EmptyState title={t('db.myUploads')}>
+        {authLoading ? (
+          <p className="text-muted-foreground">{t('messages.loadingAccount')}</p>
+        ) : (
           <Link className={buttonVariants({ variant: 'default', size: 'default' })} to="/login">
             {t('messages.signIn')}
             <ArrowRight size={16} />
           </Link>
         )}
-      </div>
+      </EmptyState>
     )
   const update = (value: Record<string, string>) =>
     setParams((current) => {
@@ -146,14 +144,12 @@ export function Library({
   const filtered = !!(q || category || course || stars || nijiiro || files)
   return (
     <>
-      {!embedded && (
-        <div className="[&_p]:mt-2 [&_p]:text-sm [&_p]:text-muted-foreground">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            {mine ? t('db.myUploads') : t('db.heroTitle')}
-          </h1>
-          <p>{mine ? t('db.myUploadsText') : t('db.heroText', { count: chartCount })}</p>
-        </div>
-      )}
+      {!embedded &&
+        (mine ? (
+          <h1 className="font-extrabold text-2xl sm:text-3xl">{t('db.myUploads')}</h1>
+        ) : (
+          <PageHero title={t('db.heroTitle')} />
+        ))}
       <ChartSearch
         key={mine ? 'mine' : ownerId ? `user:${ownerId}` : 'all'}
         query={q}
@@ -163,7 +159,7 @@ export function Library({
         onChange={update}
         counts={!mine && !uploader}
       />
-      <h2 className="flex items-center gap-2 text-base font-semibold [&_span]:text-muted-foreground">
+      <h2 className="flex items-center gap-2 text-base font-extrabold [&_span]:text-muted-foreground">
         {q ? t('messages.searchResults', { query: q }) : t('db.results')}
         {!searchPending && !loading && !error && data && <span>{data.total}</span>}
       </h2>
@@ -175,7 +171,7 @@ export function Library({
           aria-label={t('messages.loadingCharts')}
         >
           {[0, 1, 2].map((n) => (
-            <Skeleton className="h-56 rounded-2xl" key={n} />
+            <Skeleton className="h-56 rounded-[14px]" key={n} />
           ))}
         </div>
       ) : data?.items.length ? (
@@ -218,22 +214,15 @@ export function Library({
           )}
         </>
       ) : (
-        <div className={emptyStateClassName}>
-          <h2 className="text-base font-semibold">
-            {filtered
+        <EmptyState
+          title={
+            filtered
               ? t('messages.noMatchingCharts')
               : uploader
                 ? t('messages.noPublishedChartsYet')
-                : t('db.noCharts')}
-          </h2>
-          <p>
-            {filtered
-              ? t('messages.tryOtherSearchFilters')
-              : uploader
-                ? t('messages.memberHasNoPublicCharts')
-                : t('db.noChartsText')}
-          </p>
-        </div>
+                : t('db.noCharts')
+          }
+        />
       )}
     </>
   )
@@ -245,15 +234,14 @@ export function Auth({ register = false }: { register?: boolean }) {
   const destination = params.get('returnTo') || '/'
   return (
     <div className="mx-auto max-w-lg space-y-4 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+      <h1 className="text-2xl font-extrabold sm:text-3xl">
         {register ? t('messages.joinTheRhythm') : t('messages.welcomeBack')}
       </h1>
-      <p className="text-sm text-muted-foreground">{t('db.accountText')}</p>
       <Card
-        className="min-w-0 border p-5 shadow-none ring-0 sm:p-6 gap-4 p-6 [&>p]:text-muted-foreground"
+        className="min-w-0 p-5 sm:p-6 gap-4 p-6 [&>p]:text-muted-foreground"
         aria-label={t('messages.accountCenterSignIn')}
       >
-        <h2 className="text-base font-semibold">
+        <h2 className="text-base font-extrabold">
           {register
             ? t('messages.createAnAccountInTheAccountCenter')
             : t('messages.signInWithOurtaiko')}
@@ -280,17 +268,14 @@ export function Auth({ register = false }: { register?: boolean }) {
         >
           {t('messages.createAnOurtaikoAccount')}
         </a>
-        <p className="text-sm text-muted-foreground">
-          {t('messages.registrationOpensInANewTabReturnHereToSignInWhen')}
-        </p>
       </Card>
     </div>
   )
 }
 const detailCardClassName =
-  'rounded-2xl bg-white p-6 shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:bg-card'
+  'rounded-[14px] border-2 border-outline bg-card p-6 shadow-drop'
 const manageItemClassName =
-  'flex min-h-11 w-full items-center justify-between gap-3 text-left text-sm text-foreground transition-colors hover:text-[#0071e3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md'
+  'flex min-h-11 w-full items-center justify-between gap-3 text-left text-sm text-foreground transition-colors hover:text-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md'
 function formatBytes(bytes: number) {
   return bytes >= 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1)} MiB`
@@ -365,7 +350,7 @@ export function Detail() {
     <div className="flex flex-col gap-6">
       <section
         aria-labelledby="chart-title"
-        className="overflow-hidden rounded-2xl bg-white shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:bg-card"
+        className="overflow-hidden rounded-[14px] border-2 border-outline bg-card shadow-drop"
       >
         <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-start gap-4 p-4 sm:grid-cols-[16rem_minmax(0,1fr)] sm:gap-x-8 sm:gap-y-5 sm:p-8 lg:grid-cols-[20rem_minmax(0,1fr)] lg:gap-x-10">
           <ChartCover chart={chart} className="sm:row-span-3" />
@@ -373,7 +358,7 @@ export function Detail() {
             <CategoryLabels ids={chart.categoryIds} />
             <h1
               id="chart-title"
-              className="text-xl font-semibold tracking-tight wrap-anywhere sm:text-4xl"
+              className="text-xl font-extrabold wrap-anywhere sm:text-4xl"
             >
               {text.title}
             </h1>
@@ -386,7 +371,7 @@ export function Detail() {
               <p className="text-sm text-muted-foreground wrap-anywhere">{chart.title}</p>
             )}
           </div>
-          <dl className="col-span-2 grid max-w-lg grid-cols-4 gap-2 rounded-xl bg-[#f5f5f7] p-3 text-center sm:col-span-1 sm:col-start-2 sm:gap-4 sm:bg-transparent sm:p-0 sm:text-left dark:bg-muted sm:dark:bg-transparent">
+          <dl className="col-span-2 grid max-w-lg grid-cols-4 gap-2 rounded-xl bg-muted p-3 text-center sm:col-span-1 sm:col-start-2 sm:gap-4 sm:bg-transparent sm:p-0 sm:text-left sm:dark:bg-transparent">
             <div>
               <dt className="text-xs text-muted-foreground">{t('db.nijiiroId')}</dt>
               <dd
@@ -455,7 +440,7 @@ export function Detail() {
             )}
             <div className="hidden flex-1 sm:block" />
             <VoteControl
-              className="rounded-full bg-[#f5f5f7] px-1 py-0.5 dark:bg-muted"
+              className="rounded-full bg-muted px-1 py-0.5"
               score={chart.score}
               myVote={chart.myVote}
               label={t('interactions.voteOnChart')}
@@ -483,7 +468,7 @@ export function Detail() {
         {chart.hasFiles ? (
           <AudioPlayer
             compact
-            className="rounded-none border-0 border-t bg-[#fbfbfd] px-4 py-3 sm:px-8 dark:bg-muted/40"
+            className="rounded-none border-0 border-t bg-muted/60 px-4 py-3 sm:px-8"
             label={t('messages.audioPreview')}
             src={endpoints.resource(chart, 'audio')}
             startAt={chart.demoStart}
@@ -492,7 +477,7 @@ export function Detail() {
         ) : (
           <p
             role="status"
-            className="flex items-center gap-2 border-t bg-[#fbfbfd] px-4 py-3 text-sm text-muted-foreground sm:px-8 dark:bg-muted/40"
+            className="flex items-center gap-2 border-t bg-muted/60 px-4 py-3 text-sm text-muted-foreground sm:px-8"
           >
             <FileDashedIcon size={18} aria-hidden="true" />
             {t('db.noFilesText')}
@@ -552,7 +537,7 @@ export function Detail() {
               aria-label={t('messages.chartImage')}
             >
               <FileDashedIcon size={32} className="text-muted-foreground" aria-hidden="true" />
-              <h2 className="text-lg font-semibold tracking-tight">{t('db.noFiles')}</h2>
+              <h2 className="text-lg font-extrabold">{t('db.noFiles')}</h2>
               <p className="max-w-md text-sm text-muted-foreground">
                 {canManage ? t('db.noFilesManagerText') : t('db.noFilesText')}
               </p>
@@ -583,7 +568,7 @@ export function Detail() {
             aria-labelledby="chart-record-heading"
             className={cn(detailCardClassName, 'space-y-4')}
           >
-            <h2 id="chart-record-heading" className="text-lg font-semibold tracking-tight">
+            <h2 id="chart-record-heading" className="text-lg font-extrabold">
               {t('db.record')}
             </h2>
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm [&>dt]:text-muted-foreground [&>dd]:wrap-anywhere">
@@ -617,7 +602,7 @@ export function Detail() {
             aria-labelledby="chart-files-heading"
             className={cn(detailCardClassName, 'space-y-4')}
           >
-            <h2 id="chart-files-heading" className="text-lg font-semibold tracking-tight">
+            <h2 id="chart-files-heading" className="text-lg font-extrabold">
               {t('db.files')}
             </h2>
             {!chart.hasFiles && <p className="text-sm text-muted-foreground">{t('db.noFiles')}</p>}
@@ -637,7 +622,7 @@ export function Detail() {
                   </dt>
                   <dd className="wrap-anywhere">
                     <a
-                      className="text-primary hover:underline"
+                      className="text-link hover:underline"
                       href={endpoints.resource(chart, kind)}
                     >
                       {name}
@@ -657,7 +642,7 @@ export function Detail() {
               aria-labelledby="chart-description-heading"
               className={cn(detailCardClassName, 'space-y-3')}
             >
-              <h2 id="chart-description-heading" className="text-lg font-semibold tracking-tight">
+              <h2 id="chart-description-heading" className="text-lg font-extrabold">
                 {t('db.notes')}
               </h2>
               <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground wrap-anywhere">
@@ -670,7 +655,7 @@ export function Detail() {
               aria-labelledby="chart-manage-heading"
               className={cn(detailCardClassName, 'space-y-1')}
             >
-              <h2 id="chart-manage-heading" className="pb-2 text-lg font-semibold tracking-tight">
+              <h2 id="chart-manage-heading" className="pb-2 text-lg font-extrabold">
                 {t('messages.manageChart')}
               </h2>
               <ul className="divide-y">

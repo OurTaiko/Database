@@ -88,7 +88,7 @@ export function UploadFilesDialog({
   const fileTile = (kind: 'tja' | 'audio') => {
     const file = kind === 'tja' ? tja : audio
     return (
-      <Label className="flex min-w-0 flex-col items-start gap-3 rounded-2xl border p-4 [&>span]:w-full [&_small]:mt-1 [&_small]:block [&_small]:truncate [&_small]:text-muted-foreground">
+      <Label className="flex min-w-0 flex-col items-start gap-3 rounded-[14px] border p-4 [&>span]:w-full [&_small]:mt-1 [&_small]:block [&_small]:truncate [&_small]:text-muted-foreground">
         {kind === 'tja' ? <FileMusic size={24} /> : <AudioLines size={24} />}
         <span>
           <b>{kind === 'tja' ? t('messages.tjaChart') : t('messages.oggMp3Audio')}</b>

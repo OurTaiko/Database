@@ -78,7 +78,7 @@ export function ChartLeaderboard({ chart, course }: { chart: Chart; course: stri
       </div>
       {data.items.length === 0 ? (
         <div className="flex min-h-40 flex-col items-center justify-center gap-3 py-6 text-center">
-          <h3 className="text-base font-medium">
+          <h3 className="text-base font-extrabold">
             {data.total ? t('messages.noScoresOnThisPage') : t('messages.noScoresYet')}
           </h3>
           <p className="text-sm text-muted-foreground">
@@ -127,7 +127,7 @@ export function ChartLeaderboard({ chart, course }: { chart: Chart; course: stri
                   </TableCell>
                   <TableHead scope="row">
                     <Link
-                      className="inline-flex max-w-full items-center gap-2 align-middle text-primary hover:underline"
+                      className="inline-flex max-w-full items-center gap-2 align-middle text-link hover:underline"
                       to={`/users/${encodeURIComponent(entry.userId)}`}
                     >
                       <UserAvatar

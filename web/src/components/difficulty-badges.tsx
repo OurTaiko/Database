@@ -2,6 +2,16 @@ import { useTranslation } from 'react-i18next'
 import { StarIcon } from '@phosphor-icons/react'
 import type { Difficulty } from '@/tja'
 import { groupCourses, groupLevel, groupName } from '@/courses'
+import { cn } from '@/lib/utils'
+
+// Fixed course colours, dark text on both themes (AA on every swatch).
+const difficultyColors = {
+  Easy: 'bg-[#f9a15a]',
+  Normal: 'bg-[#8fd16a]',
+  Hard: 'bg-[#6cc7d8]',
+  Oni: 'bg-[#f77fab]',
+  Edit: 'bg-[#b99ae8]',
+}
 
 // One bookmark per course: its single, 1P and 2P charts are one entry, so a
 // song has at most five and they fit the fixed card height.
@@ -15,7 +25,10 @@ export function DifficultyBadges({ difficulties }: { difficulties: Difficulty[] 
       {groupCourses(difficulties).map((group) => (
         <li
           key={group.base}
-          className="flex justify-between items-center gap-1 bg-[#f5f5f7] dark:bg-muted py-2 pr-3 pl-5 min-h-8 font-medium text-[#424245] dark:text-foreground text-xs [clip-path:polygon(0_0,100%_0,100%_100%,0_100%,8px_50%)]"
+          className={cn(
+            'inline-flex justify-between items-center gap-1.5 px-2.5 border-[1.5px] border-[#382d2a] rounded-[7px] h-7 font-bold text-[#382d2a] text-xs whitespace-nowrap',
+            difficultyColors[group.base as keyof typeof difficultyColors] ?? 'bg-muted',
+          )}
         >
           <span>{groupName(group)}</span>
           <span
@@ -25,11 +38,7 @@ export function DifficultyBadges({ difficulties }: { difficulties: Difficulty[] 
               .filter((label, index, all) => all.indexOf(label) === index)
               .join(' / ')}
           >
-            <StarIcon
-              weight="fill"
-              className="size-3 text-[#0071e3] dark:text-blue-400 motion-reduce:transform-none group-hover:scale-105 transition-transform motion-reduce:transition-none duration-500 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
-              aria-hidden="true"
-            />
+            <StarIcon weight="fill" className="size-3" aria-hidden="true" />
             {groupLevel(group)}
           </span>
         </li>
