@@ -11,7 +11,6 @@ import {
   PlaylistIcon,
   MedalIcon,
   UsersIcon,
-  IdentificationCardIcon,
 } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Notice } from '@/notifications'
@@ -25,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { PROFILE_URL } from '@/components/profile-plate'
 import { ThemeToggle } from '@/theme'
 
 const navLinkClassName =
@@ -43,15 +41,6 @@ export function Layout() {
     { to: '/playlists', label: t('playlists.plaza'), icon: PlaylistIcon },
     { to: '/dans', label: t('dans.nav'), icon: MedalIcon },
     { to: '/users', label: t('messages.userSquare'), icon: UsersIcon },
-    ...(session.user
-      ? [
-          {
-            to: `${PROFILE_URL}/users/${session.user.id}`,
-            label: t('ourtaikoProfile.nav'),
-            icon: IdentificationCardIcon,
-          },
-        ]
-      : []),
     ...(session.user?.canUpload
       ? [{ to: '/me/charts', label: t('db.chartManager'), icon: FolderHeart }]
       : []),
