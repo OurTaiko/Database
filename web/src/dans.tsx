@@ -167,8 +167,36 @@ function ExamTable({ dan }: { dan: Dan }) {
   )
 }
 
+// Garbled text that stands in for a hidden title: the same for a song every time, and its
+// length says nothing about the real title.
+const garbleGlyphs = '縺繧譁蟄怜喧縺代ｦ繝ｼ繧ｹ蜷榊燕螟ｱ謨鈴擇蛻'
+function garble(seed: string) {
+  let h = 2166136261
+  for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619)
+  let text = ''
+  for (let i = 0; i < 8; i++) {
+    // mulberry32
+    h = (h + 0x6d2b79f5) | 0
+    let x = Math.imul(h ^ (h >>> 15), h | 1)
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61)
+    text += garbleGlyphs[((x ^ (x >>> 14)) >>> 0) % garbleGlyphs.length]
+  }
+  return text
+}
+
+function HiddenTitle({ seed }: { seed: string }) {
+  const { t } = useTranslation()
+  return (
+    <span className="font-medium text-muted-foreground" aria-label={t('dans.hiddenTitle')}>
+      <span aria-hidden="true">{garble(seed)}</span>
+    </span>
+  )
+}
+
 function DanCard({ dan }: { dan: Dan }) {
   const { t, i18n } = useTranslation()
+  const session = useSession()
+  const isOwner = session.user?.id === dan.ownerId
   const unavailable = dan.songs.some((s) => !s.available)
   return (
     <Link
@@ -207,7 +235,18 @@ function DanCard({ dan }: { dan: Dan }) {
         {dan.songs.map((song, i) => (
           <li key={i} className="flex items-center gap-2">
             <span className="w-5 shrink-0 text-muted-foreground tabular-nums">{i + 1}</span>
-            <span className="truncate">{song.title}</span>
+            {song.hidden && !isOwner ? (
+              <span className="truncate">
+                <HiddenTitle seed={`${dan.id}/${i}`} />
+              </span>
+            ) : (
+              <span className="truncate">{song.title}</span>
+            )}
+            {song.hidden && (
+              <Badge variant="outline" className="shrink-0">
+                {t('dans.hiddenTitle')}
+              </Badge>
+            )}
             <span className="ml-auto shrink-0 text-xs text-muted-foreground">
               {t(`dans.courses.${song.chart.course}`)} ★{song.level}
               {song.chart.side !== 'single' && ` · ${t(`dans.sides.${song.chart.side}`)}`}
@@ -277,6 +316,7 @@ export function DanPage() {
   if (error) return <Notice>{error}</Notice>
   if (!dan) return <p role="status">{t('dans.loading')}</p>
   const canEdit = session.user && (session.user.id === dan.ownerId || session.user.isAdmin)
+  const isOwner = session.user?.id === dan.ownerId
   const run = async (work: () => Promise<void>) => {
     setBusy(true)
     setError('')
@@ -352,22 +392,26 @@ export function DanPage() {
                   <span className="text-lg font-bold tabular-nums text-muted-foreground">
                     {i + 1}
                   </span>
-                  <Link
-                    to={`/charts/${song.chart.id}`}
-                    className="min-w-0 font-medium hover:underline"
-                  >
-                    {song.title}
-                    {song.subtitle && (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {song.subtitle.replace(/^(--|\+\+)/, '')}
-                      </span>
-                    )}
-                  </Link>
+                  {song.hidden && !isOwner ? (
+                    <HiddenTitle seed={`${dan.id}/${i}`} />
+                  ) : (
+                    <Link
+                      to={`/charts/${song.chart.id}`}
+                      className="min-w-0 font-medium hover:underline"
+                    >
+                      {song.title}
+                      {song.subtitle && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {song.subtitle.replace(/^(--|\+\+)/, '')}
+                        </span>
+                      )}
+                    </Link>
+                  )}
                   <span className="ml-auto text-sm text-muted-foreground">
                     {t(`dans.courses.${song.chart.course}`)} ★{song.level}
                     {song.chart.side !== 'single' && ` · ${t(`dans.sides.${song.chart.side}`)}`}
                   </span>
-                  {song.hidden && <Badge variant="outline">{t('dans.hidden')}</Badge>}
+                  {song.hidden && <Badge variant="outline">{t('dans.hiddenTitle')}</Badge>}
                   {!song.available && <Badge variant="destructive">{t('dans.changed')}</Badge>}
                 </li>
               ))}
@@ -1117,7 +1161,14 @@ export function DanEditorPage() {
             // No block is chosen for the maker: the course names the one it plays.
             setSongCount([
               ...songs,
-              { chartId: String(chart.id), title: text.title, blocks, course: '', side: '', hidden: false },
+              {
+                chartId: String(chart.id),
+                title: text.title,
+                blocks,
+                course: '',
+                side: '',
+                hidden: false,
+              },
             ])
             setPicking(null)
           }}
