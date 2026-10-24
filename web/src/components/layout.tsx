@@ -6,7 +6,6 @@ import {
   FolderIcon as FolderHeart,
   SignOutIcon as LogOut,
   SignInIcon,
-  UserIcon as UserRound,
   ListIcon as Menu,
   PlaylistIcon,
   MedalIcon,
@@ -44,7 +43,6 @@ export function Layout() {
     ...(session.user?.canUpload
       ? [{ to: '/me/charts', label: t('db.chartManager'), icon: FolderHeart }]
       : []),
-    ...(session.user ? [{ to: '/me/profile', label: t('messages.profile'), icon: UserRound }] : []),
   ]
   return (
     <div className="bg-background min-h-svh text-foreground">
