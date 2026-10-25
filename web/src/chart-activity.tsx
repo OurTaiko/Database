@@ -15,7 +15,6 @@ import {
 import type { Chart } from './api/types'
 import { baseCourse, blockKey, groupCourses, groupLevel, groupName } from './courses'
 import { Notice } from './notifications'
-import { defaultDifficulty } from './chart-difficulty'
 import { maxTja } from './tja'
 import { ChartLeaderboard } from './chart-leaderboard'
 import { withChartTitles } from './tja-titles'
@@ -43,10 +42,18 @@ export type ActivityTab = 'image' | 'preview' | 'leaderboard'
 // The chart image of one block, the embedded player playing it, or its leaderboard. A course
 // may have a single, a 1P and a 2P chart: one tab per course, then a side
 // switch. `course` is the block's key.
-export function ChartActivity({ chart }: { chart: Chart }) {
+// The chosen block is the page's (Detail), so the difficulty constants beside follow it.
+export function ChartActivity({
+  chart,
+  course,
+  onCourseChange: setCourse,
+}: {
+  chart: Chart
+  course: string
+  onCourseChange: (course: string) => void
+}) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<ActivityTab>('image')
-  const [course, setCourse] = useState(() => defaultDifficulty(chart.difficulties))
   const [source, setSource] = useState('')
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)

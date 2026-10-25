@@ -59,7 +59,9 @@ type Difficulty struct {
 	// Routes are the raw values of the difficulty constants (定数) TJAParser's notes give, by
 	// route (difficulty_constants); nil when the tool reported no notes.
 	Routes constants.Routes `json:"-"`
-	Line   int              `json:"-"`
+	// Constants are the block's published constants by route, in a chart's detail only.
+	Constants []constants.Shown `json:"constants,omitempty"`
+	Line      int               `json:"-"`
 }
 
 // Metadata is what the database stores from a TJA.

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"ourtaiko.dev/database/api/internal/constants"
 	"ourtaiko.dev/database/api/internal/database"
 	"ourtaiko.dev/database/api/internal/tja"
 )
@@ -325,6 +326,19 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	if e != nil {
 		internal(w, e)
 		return
+	}
+	// The difficulty constants, for the chart page only (lists and the game catalog go without).
+	ids := make([]int64, len(c.Difficulties))
+	for i, d := range c.Difficulties {
+		ids[i] = d.ID
+	}
+	shown, e := constants.ForBlocks(r.Context(), s.DB, ids)
+	if e != nil {
+		internal(w, e)
+		return
+	}
+	for i := range c.Difficulties {
+		c.Difficulties[i].Constants = shown[c.Difficulties[i].ID]
 	}
 	if viewer := s.viewer(r); viewer != "" {
 		e = s.DB.QueryRow(r.Context(), `SELECT value FROM chart_votes WHERE chart_id=$1 AND user_id=$2`, c.ID, viewer).Scan(&c.MyVote)

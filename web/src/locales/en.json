@@ -887,5 +887,19 @@
   "collaboration": {
     "owner": "Uploader",
     "ownerBadgeTitle": "The uploader of this chart"
+  },
+  "constants": {
+    "title": "Difficulty constant",
+    "main": "Main",
+    "sub": "Sub",
+    "stamina": "Stamina",
+    "handspeed": "Speed",
+    "burst": "Burst",
+    "complex": "Complex",
+    "rhythm": "Rhythm",
+    "unavailable": "No constant for this difficulty yet",
+    "normal": "Normal",
+    "expert": "Expert",
+    "master": "Master"
   }
 }

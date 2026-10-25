@@ -28,7 +28,9 @@ import { api, jsonRequest } from './api/client'
 import { AddToPlaylistDialog } from './playlist-dialogs'
 import type { Chart, ChartList, Vote, VoteResult } from './api/types'
 import { ChartCard, formatDuration } from '@/components/chart-card'
-import { supportsChart } from './courses'
+import { blockKey, supportsChart } from './courses'
+import { defaultDifficulty, hasConstants } from './chart-difficulty'
+import { DifficultyConstants } from './difficulty-constants'
 import { useSession } from './session-context'
 import { EditMetadata } from './edit-metadata'
 import { UploadFilesDialog } from './upload-files-dialog'
@@ -296,6 +298,8 @@ export function Detail() {
   const [coverEditing, setCoverEditing] = useState(false)
   const [filesUploading, setFilesUploading] = useState(false)
   const [collecting, setCollecting] = useState(false)
+  // The block the chart area shows (block key); empty for the default one.
+  const [chosenCourse, setChosenCourse] = useState('')
   const editButton = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     const controller = new AbortController()
@@ -305,6 +309,7 @@ export function Detail() {
     setCoverEditing(false)
     setFilesUploading(false)
     setConfirm(false)
+    setChosenCourse('')
     if (!id) return
     api<Chart>(endpoints.chart(id), { signal: controller.signal })
       .then(setChart)
@@ -337,6 +342,11 @@ export function Detail() {
       <p className="text-sm text-muted-foreground">{t('messages.loadingChart')}</p>
     )
   if (!supportsChart(chart)) return <Notice>{t('messages.thisChartTypeIsNotSupported')}</Notice>
+  const course = chart.difficulties.some((d) => blockKey(d) === chosenCourse)
+    ? chosenCourse
+    : defaultDifficulty(chart.difficulties)
+  const chosenDifficulty = chart.difficulties.find((d) => blockKey(d) === course)
+  const showConstants = hasConstants(chart.difficulties)
   const text = chartText(chart, i18n.resolvedLanguage)
   // The API decides; this only hides controls that would be refused.
   const canManage =
@@ -520,11 +530,17 @@ export function Detail() {
         />
       )}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="min-w-0">
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* Below lg the constants come before the chart area; from lg they head the sidebar. */}
+          {showConstants && (
+            <DifficultyConstants key={course} difficulty={chosenDifficulty} className="lg:hidden" />
+          )}
           {chart.hasFiles ? (
             <ChartActivity
               key={`${chart.id}:${chart.difficulties.map((d) => d.chartHash ?? '').join(',')}`}
               chart={chart}
+              course={course}
+              onCourseChange={setChosenCourse}
             />
           ) : (
             <section
@@ -562,6 +578,13 @@ export function Detail() {
           </div>
         </div>
         <aside className="flex min-w-0 flex-col gap-6">
+          {showConstants && (
+            <DifficultyConstants
+              key={course}
+              difficulty={chosenDifficulty}
+              className="max-lg:hidden"
+            />
+          )}
           <section
             aria-labelledby="chart-record-heading"
             className={cn(detailCardClassName, 'space-y-4')}

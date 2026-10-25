@@ -5,7 +5,7 @@ import { groupCourses, groupLevel, groupName } from '@/courses'
 import { cn } from '@/lib/utils'
 
 // Fixed course colours, dark text on both themes (AA on every swatch).
-const difficultyColors = {
+export const difficultyColors = {
   Easy: 'bg-[#f9a15a]',
   Normal: 'bg-[#8fd16a]',
   Hard: 'bg-[#6cc7d8]',

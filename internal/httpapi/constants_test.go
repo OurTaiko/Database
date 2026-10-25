@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,6 +122,25 @@ func TestDifficultyConstants(t *testing.T) {
 	}
 	if !at.Equal(updated) {
 		t.Fatalf("calibrating touched the chart: update_at %v → %v", updated, at)
+	}
+	// The chart page gets every rated route of each block; lists go without.
+	var detail Chart
+	if code := w.c.do("", "GET", w.chart(w.song), "", &detail); code != 200 {
+		t.Fatal("detail", code)
+	}
+	for _, d := range detail.Difficulties {
+		var routes []string
+		for _, c := range d.Constants {
+			routes = append(routes, c.Route)
+		}
+		want := map[string]string{"Hard": "unbranched", "Oni": "normal expert master"}[d.Course]
+		last := d.Course + "/" + routes[len(routes)-1]
+		if strings.Join(routes, " ") != want || d.Constants[len(d.Constants)-1].MainConstant != *rated[last].main {
+			t.Fatalf("%s: constants %+v", d.Course, d.Constants)
+		}
+	}
+	if code, body := w.c.raw("", "/api/v1/charts"); code != 200 || strings.Contains(string(body), `"constants"`) {
+		t.Fatalf("the list carries constants: %d", code)
 	}
 	if again, err := constants.Recalibrate(ctx, s.DB); err != nil || again.New || again.Rated != 0 {
 		t.Fatalf("second calibration: %+v %v", again, err)

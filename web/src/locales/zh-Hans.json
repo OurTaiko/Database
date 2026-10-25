@@ -875,5 +875,19 @@
   "collaboration": {
     "owner": "上传者",
     "ownerBadgeTitle": "这首谱面的上传者"
+  },
+  "constants": {
+    "title": "难度定数",
+    "main": "主定数",
+    "sub": "副定数",
+    "stamina": "体力",
+    "handspeed": "手速",
+    "burst": "爆发",
+    "complex": "复合",
+    "rhythm": "节奏",
+    "unavailable": "这个难度还没有定数",
+    "normal": "普通",
+    "expert": "玄人",
+    "master": "达人"
   }
 }
