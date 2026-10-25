@@ -638,3 +638,17 @@ func TestPlaylistRemovedNotice(t *testing.T) {
 		t.Fatalf("notice %+v", notes)
 	}
 }
+
+// Administrators may upload without the permission bit; other users need it.
+func TestUploadPermission(t *testing.T) {
+	w := interactionFixture(t)
+	for name, want := range map[string]bool{"owner": true, "admin": true, "alice": false} {
+		var me struct{ User User }
+		if code := w.c.do(name, "GET", "/api/v1/me", "", &me); code != 200 || me.User.CanUpload != want {
+			t.Fatalf("%s canUpload = %t (%d), want %t", name, me.User.CanUpload, code, want)
+		}
+		if code := w.c.do(name, "POST", "/api/v1/charts", "", nil); (code == 403) == want {
+			t.Fatalf("%s upload status %d", name, code)
+		}
+	}
+}

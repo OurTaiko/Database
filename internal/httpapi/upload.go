@@ -44,7 +44,7 @@ func uploadReadError(w http.ResponseWriter, e error) {
 	problem(w, 400, "UPLOAD_FILES_INVALID", "上传内容不完整，请重试")
 }
 
-// uploader requires a signed-in user holding the upload permission bit.
+// uploader requires a signed-in user holding the upload permission bit, or an administrator.
 func (s *Server) uploader(w http.ResponseWriter, r *http.Request) (session, bool) {
 	u, ok := s.required(w, r, true)
 	if !ok {

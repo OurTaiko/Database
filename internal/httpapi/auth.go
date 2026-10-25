@@ -14,8 +14,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// PermissionUpload is bit 0 of users.permission_flags. Only users holding it
-// see the upload entry on the website, and only they may upload.
+// PermissionUpload is bit 0 of users.permission_flags. Only users holding it,
+// and administrators, see the upload entry on the website and may upload.
 const PermissionUpload int64 = 0x1
 
 type User struct {
@@ -118,7 +118,7 @@ func (s *Server) current(r *http.Request) (session, error) {
 		return session{}, e
 	}
 	e = s.DB.QueryRow(r.Context(), `SELECT permission_flags FROM users WHERE id=$1`, v.User.ID).Scan(&v.User.PermissionFlags)
-	v.User.CanUpload = v.User.PermissionFlags&PermissionUpload != 0
+	v.User.CanUpload = v.User.IsAdmin || v.User.PermissionFlags&PermissionUpload != 0
 	return v, e
 }
 
