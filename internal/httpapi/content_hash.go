@@ -12,14 +12,18 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"ourtaiko.dev/database/api/internal/charthash"
+	"ourtaiko.dev/database/api/internal/constants"
+	"ourtaiko.dev/database/api/internal/database"
 	"ourtaiko.dev/database/api/internal/tja"
 )
 
 // RunContentHashBackfill fills chart_difficulties.content_hash for charts stored before
-// migration 010, or hashed by an older algorithm than the tool now reports, and adds the
-// titles TJAParser reads (origin and every locale) to the title dictionaries, never removing a
-// key. It runs after start-up, resumes on the next start, and leaves a block the tool cannot
-// hash NULL with a log line; the retire trigger ignores a hash set for the first time.
+// migration 010, or hashed by an older algorithm than the tool now reports, and the raw
+// difficulty constants for blocks stored before migration 011 or computed by an older
+// constants.Version; it adds the titles TJAParser reads (origin and every locale) to the title
+// dictionaries, never removing a key. It runs after start-up, resumes on the next start, and
+// leaves a block the tool cannot play NULL with a log line; the retire trigger ignores a hash
+// set for the first time, and the constants touch neither scores nor the chart's update_at.
 func (s *Server) RunContentHashBackfill(ctx context.Context) {
 	cli, ok := tja.Inspector.(charthash.CLI)
 	if !ok {
@@ -30,14 +34,14 @@ func (s *Server) RunContentHashBackfill(ctx context.Context) {
 		log.Printf("content hash backfill skipped: %v", err)
 		return
 	}
-	if err := s.backfillContentHashes(ctx, version+":"); err != nil && ctx.Err() == nil {
+	if err := s.backfillContentHashes(ctx, version+":", constants.Version); err != nil && ctx.Err() == nil {
 		log.Printf("content hash backfill: %v", err)
 	}
 }
 
-func (s *Server) backfillContentHashes(ctx context.Context, prefix string) error {
+func (s *Server) backfillContentHashes(ctx context.Context, prefix string, constantsVersion int) error {
 	rows, err := s.DB.Query(ctx, `SELECT DISTINCT c.id FROM charts c JOIN chart_difficulties d ON d.chart_id=c.id
- WHERE c.status<>'deleted' AND c.tja_file IS NOT NULL AND (d.content_hash IS NULL OR left(d.content_hash,length($1))<>$1) ORDER BY c.id`, prefix)
+ WHERE c.status<>'deleted' AND c.tja_file IS NOT NULL AND (d.content_hash IS NULL OR left(d.content_hash,length($1))<>$1 OR d.constants_version IS DISTINCT FROM $2) ORDER BY c.id`, prefix, constantsVersion)
 	if err != nil {
 		return err
 	}
@@ -114,6 +118,15 @@ func (s *Server) backfillChartHashes(parent context.Context, id int64) error {
 			continue
 		}
 		if _, err = tx.Exec(ctx, `UPDATE chart_difficulties SET content_hash=$4 WHERE chart_id=$1 AND course=$2 AND side=$3 AND content_hash IS DISTINCT FROM $4`, id, b.Name, b.Side, b.Hash); err != nil {
+			return err
+		}
+		raw, ok := constants.OfBlock(b.Notes)
+		if !ok {
+			continue
+		}
+		args := append([]any{id, b.Name, b.Side}, database.ConstantsColumns(&raw)...)
+		if _, err = tx.Exec(ctx, `UPDATE chart_difficulties SET (`+database.ConstantsColumnNames+`)=($4,$5,$6,$7,$8,$9,$10,$11,$12)
+ WHERE chart_id=$1 AND course=$2 AND side=$3`, args...); err != nil {
 			return err
 		}
 	}

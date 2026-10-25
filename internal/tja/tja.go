@@ -21,6 +21,7 @@ import (
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/unicode/norm"
 	"ourtaiko.dev/database/api/internal/charthash"
+	"ourtaiko.dev/database/api/internal/constants"
 )
 
 const Version = "tja-official-v2"
@@ -55,7 +56,10 @@ type Difficulty struct {
 	// Hash is the block's content hash from TJAParser ("v1:" + 64 hex): what the block plays
 	// as, whatever its headers say. Scores and 段位 songs follow it (chart_difficulties.content_hash).
 	Hash string `json:"chartHash,omitempty"`
-	Line int    `json:"-"`
+	// Constants are the raw values of the difficulty constants (定数) TJAParser's notes give
+	// (chart_difficulties.raw_*, note_count); nil when the tool reported no notes.
+	Constants *constants.Raw `json:"-"`
+	Line      int            `json:"-"`
 }
 
 // Metadata is what the database stores from a TJA.
@@ -132,8 +136,9 @@ func NormalizeUTF8(data []byte, encoding string) ([]byte, *Issue) {
 // file the WAVE header names.
 // Inspector is the TJAParser tool that reads chart bodies: the game's own parser, built into
 // the image at the tag the game references. The header checks in scan are the gate; the
-// blocks, their hashes and the titles as the game reads them come from here. InspectDir holds
-// the file it reads (the staging directory in production).
+// blocks, their hashes, the titles as the game reads them and the notes of the difficulty
+// constants come from here. InspectDir holds the file it reads (the staging directory in
+// production).
 var Inspector charthash.Inspector = charthash.CLI{Bin: os.Getenv("TJAPARSER_BIN")}
 var InspectDir = os.TempDir()
 
@@ -153,7 +158,8 @@ func Available() bool {
 
 // Parse reads a stored-form (UTF-8) TJA as the database registers it: the header checks of
 // scan first, then TJAParser for the blocks as the game lists them, their content hashes and
-// the titles by locale (origin + en/ja/ko/zh/zh_tw). A block the game cannot play is refused.
+// the titles by locale (origin + en/ja/ko/zh/zh_tw) and the raw difficulty constants. A block
+// the game cannot play is refused.
 func Parse(data []byte, audioName string) (Metadata, *Issue) {
 	m, issue := scan(data, audioName)
 	if issue != nil {
@@ -182,6 +188,9 @@ func Parse(data []byte, audioName string) (Metadata, *Issue) {
 			return m, fail("TJA_PARSER_UNAVAILABLE", "谱面解析服务没有给出内容哈希", b.Line)
 		}
 		d.Hash, d.Line = b.Hash, b.Line
+		if raw, ok := constants.OfBlock(b.Notes); ok {
+			d.Constants = &raw
+		}
 		if b.Maker != "" {
 			d.Maker = b.Maker
 		}
