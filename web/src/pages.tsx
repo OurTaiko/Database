@@ -34,7 +34,7 @@ import { DifficultyConstants } from './difficulty-constants'
 import { useSession } from './session-context'
 import { EditMetadata } from './edit-metadata'
 import { UploadFilesDialog } from './upload-files-dialog'
-import { ChartActivity } from './chart-activity'
+import { ChartActivity, type ActivityTab } from './chart-activity'
 import { CommentSection, chartSubject } from './comments'
 import { VoteControl } from '@/components/vote-control'
 import { Modal, Notice } from './notifications'
@@ -284,12 +284,16 @@ function formatBytes(bytes: number) {
     ? `${(bytes / 1024 / 1024).toFixed(1)} MiB`
     : `${Math.max(1, Math.round(bytes / 1024))} KiB`
 }
+type PageTab = 'info' | 'chart' | 'leaderboard' | 'comments'
+type DetailSection = 'info' | 'activity' | 'comments'
+
 export function Detail() {
   const { t } = useTranslation()
   const { notify } = useNotification()
   const { id, commentId } = useParams(),
     session = useSession(),
-    navigate = useNavigate()
+    navigate = useNavigate(),
+    location = useLocation()
   const [chart, setChart] = useState<Chart | null>(null),
     [error, setError] = useState(''),
     [confirm, setConfirm] = useState(false),
@@ -300,6 +304,9 @@ export function Detail() {
   const [collecting, setCollecting] = useState(false)
   // The block the chart area shows (block key); empty for the default one.
   const [chosenCourse, setChosenCourse] = useState('')
+  // Below lg the page shows one section at a time; wider screens show them all.
+  const [section, setSection] = useState<DetailSection>('info')
+  const [activityTab, setActivityTab] = useState<ActivityTab>('image')
   const editButton = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     const controller = new AbortController()
@@ -310,6 +317,7 @@ export function Detail() {
     setFilesUploading(false)
     setConfirm(false)
     setChosenCourse('')
+    setActivityTab('image')
     if (!id) return
     api<Chart>(endpoints.chart(id), { signal: controller.signal })
       .then(setChart)
@@ -318,6 +326,9 @@ export function Detail() {
       })
     return () => controller.abort()
   }, [id])
+  useEffect(() => {
+    setSection(commentId || location.hash === '#comments' ? 'comments' : 'info')
+  }, [id, commentId, location.hash])
   const remove = async () => {
     if (!chart) return
     setError('')
@@ -347,6 +358,21 @@ export function Detail() {
     : defaultDifficulty(chart.difficulties)
   const chosenDifficulty = chart.difficulties.find((d) => blockKey(d) === course)
   const showConstants = hasConstants(chart.difficulties)
+  const pageTab: PageTab =
+    section === 'activity' ? (activityTab === 'leaderboard' ? 'leaderboard' : 'chart') : section
+  const selectPageTab = (value: PageTab) => {
+    if (value === 'info' || value === 'comments') return setSection(value)
+    setSection('activity')
+    if (value === 'leaderboard') setActivityTab('leaderboard')
+    else if (activityTab === 'leaderboard') setActivityTab('image')
+  }
+  // A chart without files has no leaderboard to open.
+  const pageTabs: [PageTab, string][] = [
+    ['info', t('messages.aboutTab')],
+    ['chart', t('messages.chartTab')],
+    ...(chart.hasFiles ? [['leaderboard', t('messages.leaderboardTab')] as [PageTab, string]] : []),
+    ['comments', t('interactions.publicCommentCount')],
+  ]
   const text = chartText(chart, i18n.resolvedLanguage)
   // The API decides; this only hides controls that would be refused.
   const canManage =
@@ -466,6 +492,7 @@ export function Detail() {
             />
             <a
               href="#comments"
+              onClick={() => setSection('comments')}
               className="inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground hover:text-foreground max-sm:hidden"
             >
               <ChatCircleIcon size={18} aria-hidden="true" />
@@ -529,41 +556,80 @@ export function Detail() {
           }
         />
       )}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="flex min-w-0 flex-col gap-6">
-          {/* Below lg the constants come before the chart area; from lg they head the sidebar. */}
-          {showConstants && (
-            <DifficultyConstants key={course} difficulty={chosenDifficulty} className="lg:hidden" />
-          )}
-          {chart.hasFiles ? (
-            <ChartActivity
-              key={`${chart.id}:${chart.difficulties.map((d) => d.chartHash ?? '').join(',')}`}
-              chart={chart}
-              course={course}
-              onCourseChange={setChosenCourse}
-            />
-          ) : (
-            <section
-              className={cn(
-                detailCardClassName,
-                'flex flex-col items-center gap-3 py-12 text-center',
-              )}
-              aria-label={t('messages.chartImage')}
+      <Tabs
+        value={pageTab}
+        onValueChange={(value) => selectPageTab(value as PageTab)}
+        className="lg:hidden"
+      >
+        {/* Short labels, each tab as wide as its label needs; one that still does not fit is cut short. */}
+        <TabsList
+          aria-label={t('messages.chartSections')}
+          className="flex h-auto w-full gap-0.5 rounded-[12px] bg-muted p-1"
+        >
+          {pageTabs.map(([value, label]) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className="h-9 min-w-0 flex-auto px-1.5 text-sm text-muted-foreground after:hidden"
             >
-              <FileDashedIcon size={32} className="text-muted-foreground" aria-hidden="true" />
-              <h2 className="text-lg font-extrabold">{t('db.noFiles')}</h2>
-              <p className="max-w-md text-sm text-muted-foreground">
-                {canManage ? t('db.noFilesManagerText') : t('db.noFilesText')}
-              </p>
-              {canManage && (
-                <Button variant="outline" onClick={() => setFilesUploading(true)}>
-                  <UploadSimpleIcon size={16} aria-hidden="true" />
-                  {t('db.uploadChartFiles')}
-                </Button>
+              <span className="truncate">{label}</span>
+              {value === 'comments' && chart.commentCount > 0 && (
+                <span className="text-xs tabular-nums">{chart.commentCount}</span>
               )}
-            </section>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div
+          className={cn(
+            'flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1',
+            section === 'info' && 'max-lg:hidden',
           )}
-          <div className="mt-6">
+        >
+          <div
+            className={cn('flex min-w-0 flex-col gap-6', section !== 'activity' && 'max-lg:hidden')}
+          >
+            {/* Below lg the constants head the chart section; from lg, the sidebar. */}
+            {showConstants && (
+              <DifficultyConstants
+                key={course}
+                difficulty={chosenDifficulty}
+                className="lg:hidden"
+              />
+            )}
+            {chart.hasFiles ? (
+              <ChartActivity
+                key={`${chart.id}:${chart.difficulties.map((d) => d.chartHash ?? '').join(',')}`}
+                chart={chart}
+                tab={activityTab}
+                onTabChange={setActivityTab}
+                course={course}
+                onCourseChange={setChosenCourse}
+              />
+            ) : (
+              <section
+                className={cn(
+                  detailCardClassName,
+                  'flex flex-col items-center gap-3 py-12 text-center',
+                )}
+                aria-label={t('messages.chartImage')}
+              >
+                <FileDashedIcon size={32} className="text-muted-foreground" aria-hidden="true" />
+                <h2 className="text-lg font-extrabold">{t('db.noFiles')}</h2>
+                <p className="max-w-md text-sm text-muted-foreground">
+                  {canManage ? t('db.noFilesManagerText') : t('db.noFilesText')}
+                </p>
+                {canManage && (
+                  <Button variant="outline" onClick={() => setFilesUploading(true)}>
+                    <UploadSimpleIcon size={16} aria-hidden="true" />
+                    {t('db.uploadChartFiles')}
+                  </Button>
+                )}
+              </section>
+            )}
+          </div>
+          <div className={cn('min-w-0', section !== 'comments' && 'max-lg:hidden')}>
             <CommentSection
               subject={chartSubject(chart)}
               focusId={commentId}
@@ -577,7 +643,12 @@ export function Detail() {
             />
           </div>
         </div>
-        <aside className="flex min-w-0 flex-col gap-6">
+        <aside
+          className={cn(
+            'flex min-w-0 flex-col gap-6 lg:col-start-2 lg:row-start-1',
+            section !== 'info' && 'max-lg:hidden',
+          )}
+        >
           {showConstants && (
             <DifficultyConstants
               key={course}

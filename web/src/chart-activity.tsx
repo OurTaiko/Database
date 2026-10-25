@@ -46,15 +46,18 @@ export type ActivityTab = 'image' | 'preview' | 'leaderboard'
 // The chosen block is the page's (Detail), so the difficulty constants beside follow it.
 export function ChartActivity({
   chart,
+  tab,
+  onTabChange: setTab,
   course,
   onCourseChange: setCourse,
 }: {
   chart: Chart
+  tab: ActivityTab
+  onTabChange: (tab: ActivityTab) => void
   course: string
   onCourseChange: (course: string) => void
 }) {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<ActivityTab>('image')
   const [source, setSource] = useState('')
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -98,40 +101,30 @@ export function ChartActivity({
       value={tab}
       onValueChange={(value) => setTab(value as ActivityTab)}
       className="min-w-0 gap-5 rounded-[14px] border-2 border-outline bg-card p-5 shadow-drop sm:p-6"
-      aria-label={t('messages.chartSections')}
+      aria-label={t('messages.chartPreviewAndLeaderboard')}
       data-testid="chart-activity"
     >
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        {/* On a phone the three share the row, each its icon over a small label that may wrap
-            (side by side they would push the page wider). */}
+      <section
+        className="flex min-w-0 flex-wrap items-center justify-between gap-3"
+        aria-label={t('messages.chartContentAndDifficultySelection')}
+      >
         <TabsList
           aria-label={t('messages.songDetails')}
-          className={cn(
-            tabButtonGroupClassName,
-            'max-sm:grid max-sm:h-auto max-sm:w-full max-sm:grid-cols-3',
-          )}
+          className={cn(tabButtonGroupClassName, tab === 'leaderboard' && 'max-lg:hidden')}
         >
-          {(
-            [
-              ['image', FileMusic, t('messages.chartImage')],
-              ['preview', PlayIcon, t('messages.chartPreview')],
-              ['leaderboard', TrophyIcon, t('messages.leaderboard')],
-            ] as const
-          ).map(([value, Icon, label]) => (
-            <TabsTrigger
-              key={value}
-              value={value}
-              className={cn(
-                tabButtonClassName,
-                'max-sm:min-w-0 max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:py-1.5 max-sm:text-xs max-sm:whitespace-normal',
-              )}
-            >
-              <Icon size={18} aria-hidden="true" className="shrink-0" />
-              <span className="max-w-full max-sm:leading-tight max-sm:text-balance max-sm:whitespace-normal">
-                {label}
-              </span>
-            </TabsTrigger>
-          ))}
+          <TabsTrigger value="image" className={tabButtonClassName}>
+            <FileMusic size={18} aria-hidden="true" />
+            {t('messages.chartImage')}
+          </TabsTrigger>
+          <TabsTrigger value="preview" className={tabButtonClassName}>
+            <PlayIcon size={18} aria-hidden="true" />
+            {t('messages.chartPreview')}
+          </TabsTrigger>
+          {/* Below lg the page tabs open the leaderboard. */}
+          <TabsTrigger value="leaderboard" className={cn(tabButtonClassName, 'max-lg:hidden')}>
+            <TrophyIcon size={18} aria-hidden="true" />
+            {t('messages.leaderboard')}
+          </TabsTrigger>
         </TabsList>
         <div className="-mx-1 flex min-w-0 max-w-full items-center gap-3 overflow-x-auto px-1 py-1">
           <Tabs
@@ -196,7 +189,7 @@ export function ChartActivity({
             </Tabs>
           )}
         </div>
-      </div>
+      </section>
       <div className="min-w-0">
         {/* The leaderboard does not need the TJA. */}
         {tab === 'leaderboard' ? (
