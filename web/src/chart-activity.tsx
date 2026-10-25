@@ -2,6 +2,7 @@ import { i18n } from '@/i18n'
 import { useTranslation } from 'react-i18next'
 import { endpoints } from '@/api/endpoints'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import {
@@ -101,19 +102,36 @@ export function ChartActivity({
       data-testid="chart-activity"
     >
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <TabsList aria-label={t('messages.songDetails')} className={tabButtonGroupClassName}>
-          <TabsTrigger value="image" className={tabButtonClassName}>
-            <FileMusic size={18} aria-hidden="true" />
-            {t('messages.chartImage')}
-          </TabsTrigger>
-          <TabsTrigger value="preview" className={tabButtonClassName}>
-            <PlayIcon size={18} aria-hidden="true" />
-            {t('messages.chartPreview')}
-          </TabsTrigger>
-          <TabsTrigger value="leaderboard" className={tabButtonClassName}>
-            <TrophyIcon size={18} aria-hidden="true" />
-            {t('messages.leaderboard')}
-          </TabsTrigger>
+        {/* On a phone the three share the row, each its icon over a small label that may wrap
+            (side by side they would push the page wider). */}
+        <TabsList
+          aria-label={t('messages.songDetails')}
+          className={cn(
+            tabButtonGroupClassName,
+            'max-sm:grid max-sm:h-auto max-sm:w-full max-sm:grid-cols-3',
+          )}
+        >
+          {(
+            [
+              ['image', FileMusic, t('messages.chartImage')],
+              ['preview', PlayIcon, t('messages.chartPreview')],
+              ['leaderboard', TrophyIcon, t('messages.leaderboard')],
+            ] as const
+          ).map(([value, Icon, label]) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className={cn(
+                tabButtonClassName,
+                'max-sm:min-w-0 max-sm:flex-col max-sm:gap-0.5 max-sm:px-1 max-sm:py-1.5 max-sm:text-xs max-sm:whitespace-normal',
+              )}
+            >
+              <Icon size={18} aria-hidden="true" className="shrink-0" />
+              <span className="max-w-full max-sm:leading-tight max-sm:text-balance max-sm:whitespace-normal">
+                {label}
+              </span>
+            </TabsTrigger>
+          ))}
         </TabsList>
         <div className="-mx-1 flex min-w-0 max-w-full items-center gap-3 overflow-x-auto px-1 py-1">
           <Tabs
