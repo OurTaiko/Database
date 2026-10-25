@@ -14,9 +14,9 @@ import (
 	"ourtaiko.dev/database/api/internal/tja"
 )
 
-// A stored chart's blocks carry the raw difficulty constants (a branching block its master
-// route); the startup backfill fills blocks stored without them (before migration 011). Being
-// derived, they leave the chart's update_at alone (R010 counts the other block columns).
+// Difficulty constants from storing to rating: every route stored with the blocks, rated by the
+// first calibration, not recalibrated by the same data, refilled by the startup backfill; none
+// of it touches the chart's update_at, which block changes still do (R010).
 func TestDifficultyConstants(t *testing.T) {
 	if !tja.Available() {
 		t.Skip("tjaparser not found: set TJAPARSER_BIN or put it on PATH")
@@ -66,31 +66,29 @@ func TestDifficultyConstants(t *testing.T) {
 	}
 	setDifficulties()
 
+	// Every route of each block, under its content hash: note count, main constant (nil until
+	// rated), calibration; and the chart's update_at.
 	type row struct {
-		version         int16
-		stamina, rhythm float64
-		notes           int32
+		notes       int32
+		main        *float64
+		calibration *int32
 	}
-	stored := func() (map[string]*row, time.Time) {
+	stored := func() (map[string]row, time.Time) {
 		t.Helper()
-		rows, err := s.DB.Query(ctx, `SELECT course,constants_version,raw_stamina,raw_rhythm,note_count FROM chart_difficulties WHERE chart_id=$1`, w.song)
+		rows, err := s.DB.Query(ctx, `SELECT d.course||'/'||k.route,k.note_count,k.main_constant,k.calibration_version
+ FROM chart_difficulties d JOIN difficulty_constants k ON k.content_hash=d.content_hash WHERE d.chart_id=$1`, w.song)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer rows.Close()
-		result := map[string]*row{}
+		result := map[string]row{}
 		for rows.Next() {
-			var course string
-			var version *int16
-			var stamina, rhythm *float64
-			var notes *int32
-			if err = rows.Scan(&course, &version, &stamina, &rhythm, &notes); err != nil {
+			var key string
+			var r row
+			if err = rows.Scan(&key, &r.notes, &r.main, &r.calibration); err != nil {
 				t.Fatal(err)
 			}
-			result[course] = nil
-			if version != nil {
-				result[course] = &row{*version, *stamina, *rhythm, *notes}
-			}
+			result[key] = r
 		}
 		var updated time.Time
 		if err = s.DB.QueryRow(ctx, `SELECT update_at FROM charts WHERE id=$1`, w.song).Scan(&updated); err != nil {
@@ -99,32 +97,55 @@ func TestDifficultyConstants(t *testing.T) {
 		return result, updated
 	}
 	uploaded, updated := stored()
-	// Oni: 1 common note, 4 on the master route, 1 after.
-	if uploaded["Hard"] == nil || uploaded["Oni"] == nil || uploaded["Hard"].notes != 6 || uploaded["Oni"].notes != 6 ||
-		uploaded["Oni"].version != constants.Version || uploaded["Oni"].stamina <= 0 {
-		t.Fatalf("stored %+v %+v", uploaded["Hard"], uploaded["Oni"])
+	// Oni: 1 common note and 1 after the branch, with 1, 2 or 4 on the routes; not rated yet.
+	notes := map[string]int32{"Hard/unbranched": 6, "Oni/normal": 3, "Oni/expert": 4, "Oni/master": 6}
+	for key, n := range notes {
+		if r, ok := uploaded[key]; !ok || r.notes != n || r.main != nil {
+			t.Fatalf("stored %s: %+v", key, uploaded[key])
+		}
+	}
+	if len(uploaded) != len(notes) {
+		t.Fatalf("stored %v", uploaded)
 	}
 
-	if _, err := s.DB.Exec(ctx, `UPDATE chart_difficulties SET (`+database.ConstantsColumnNames+`)=(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL) WHERE chart_id=$1`, w.song); err != nil {
+	// The first calibration rates every row, and touches no chart.
+	result, err := constants.Recalibrate(ctx, s.DB)
+	if err != nil || !result.New || result.Calibration.Version != 1 || result.Rated != 4 {
+		t.Fatalf("first calibration: %+v %v", result, err)
+	}
+	rated, at := stored()
+	for key, r := range rated {
+		if r.main == nil || *r.calibration != 1 {
+			t.Fatalf("%s not rated: %+v", key, r)
+		}
+	}
+	if !at.Equal(updated) {
+		t.Fatalf("calibrating touched the chart: update_at %v → %v", updated, at)
+	}
+	if again, err := constants.Recalibrate(ctx, s.DB); err != nil || again.New || again.Rated != 0 {
+		t.Fatalf("second calibration: %+v %v", again, err)
+	}
+
+	// Without its rows (as before migration 012) the backfill brings them back, rated, and leaves
+	// update_at alone.
+	if _, err = s.DB.Exec(ctx, `DELETE FROM difficulty_constants`); err != nil {
 		t.Fatal(err)
 	}
-	cleared, at := stored()
-	if cleared["Hard"] != nil || !at.Equal(updated) {
-		t.Fatalf("clearing the constants: %+v, update_at %v → %v", cleared["Hard"], updated, at)
-	}
-	if err := s.backfillContentHashes(ctx, "v1:", constants.Version); err != nil {
+	if err = s.backfillContentHashes(ctx, "v1:", constants.Version); err != nil {
 		t.Fatal(err)
 	}
 	backfilled, at := stored()
-	if *backfilled["Hard"] != *uploaded["Hard"] || *backfilled["Oni"] != *uploaded["Oni"] || !at.Equal(updated) {
-		t.Fatalf("backfill: %+v %+v, update_at %v → %v", backfilled["Hard"], backfilled["Oni"], updated, at)
+	for key, r := range rated {
+		if b := backfilled[key]; b.notes != r.notes || b.main == nil || *b.main != *r.main || !at.Equal(updated) {
+			t.Fatalf("backfill %s: %+v, want %+v; update_at %v → %v", key, b, r, updated, at)
+		}
 	}
 	// Storing the same reading again changes nothing.
 	setDifficulties()
-	if again, at := stored(); *again["Oni"] != *uploaded["Oni"] || !at.Equal(updated) {
-		t.Fatalf("same file again: %+v, update_at %v → %v", again["Oni"], updated, at)
+	if _, at := stored(); !at.Equal(updated) {
+		t.Fatalf("same file again: update_at %v → %v", updated, at)
 	}
-	// A block's other columns still count as a change of the chart.
+	// A block's columns count as a change of the chart (R010), as before 011.
 	if _, err := s.DB.Exec(ctx, `UPDATE chart_difficulties SET maker='Someone' WHERE chart_id=$1 AND course='Hard'`, w.song); err != nil {
 		t.Fatal(err)
 	}

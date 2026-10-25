@@ -139,7 +139,7 @@ func main() {
 	background, stopBackground := context.WithCancel(context.Background())
 	defer stopBackground()
 	go app.RunNotificationPrune(background)
-	go app.RunContentHashBackfill(background)
+	go app.RunDifficultyConstants(background)
 	srv := &http.Server{Addr: listen, Handler: app.Handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 180 * time.Second, WriteTimeout: 240 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	go func() {
 		log.Printf("OurTaikoDatabase listening on http://%s", srv.Addr)
