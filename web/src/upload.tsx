@@ -1,4 +1,8 @@
 import { useTranslation } from 'react-i18next'
+import { chartText } from '@/chart-language'
+import { i18n } from '@/i18n'
+import { endpoints } from '@/api/endpoints'
+import { DialogClose } from '@/components/ui/dialog'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -7,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import { useEffect, useRef, useState } from 'react'
 import type { DragEvent, FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   WaveformIcon as AudioLines,
   FileAudioIcon as FileMusic,
@@ -18,8 +22,10 @@ import {
 import { CoverPicker } from '@/components/cover-picker'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CategoryPicker } from './categories'
-import { uploadChart } from './api/client'
+import { api, uploadChart } from './api/client'
+import type { Chart } from './api/types'
 import { EmptyState } from '@/components/empty-state'
+import { Modal, Notice } from './notifications'
 import { useNotification } from './notification-context'
 import { useSession } from './session-context'
 import { isAudioFilename, maxAudio, maxTja } from './tja'
@@ -32,12 +38,63 @@ function createRequestKey() {
 }
 type UploadMode = 'files' | 'song'
 
+/**
+ * Replaces a chart's files through the upload page, as on Fanmade: the page
+ * at /charts/:id/update loads the chart and renders UploadPage with it. A
+ * song registered without files (R038) gets its first TJA and audio here too.
+ */
+export function UpdatePage() {
+  const { t } = useTranslation()
+  const { id } = useParams()
+  const session = useSession()
+  const [chart, setChart] = useState<Chart | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    const controller = new AbortController()
+    setChart(null)
+    setError('')
+    if (!id) return
+    api<Chart>(endpoints.chart(id), { signal: controller.signal })
+      .then((loaded) => {
+        if (!controller.signal.aborted) setChart(loaded)
+      })
+      .catch((e: Error) => {
+        if (!controller.signal.aborted) setError(e.message)
+      })
+    return () => controller.abort()
+  }, [id])
+  if (!id) return <Notice>{t('messages.missingSongId')}</Notice>
+  if (error) return <Notice>{error}</Notice>
+  if (!chart || session.loading) return <p role="status">{t('messages.loadingSong')}</p>
+  // The API decides; this only hides a form that would be refused.
+  const canManage =
+    !!session.user &&
+    (session.user.isAdmin || (session.user.canUpload && session.user.id === chart.uploaderId))
+  if (!canManage) return <p>{t('messages.onlyTheUploaderOrAnAdministratorCanUpdateThisSong')}</p>
+  return (
+    <UploadPage
+      key={`${chart.id}:${chart.difficulties.map((d) => d.chartHash ?? '').join(',')}:${chart.audioHash}`}
+      existing={chart}
+    />
+  )
+}
+
 // Adds an official chart: a TJA, its audio and what identifies the song. The
 // API parses and validates the files; this page only checks what it can see.
 // In song mode no files are sent: a song that is known but whose files are
 // not at hand is registered by its title, and its files are uploaded later
-// from its page.
-export function UploadPage({ embedded = false }: { embedded?: boolean }) {
+// from its page. With `existing` the same form replaces that chart's files
+// through PUT /charts/{id}/files: a new TJA is required, the audio is kept
+// unless a new one is chosen, and the text fields start from the chart's
+// values. A chart that has files asks for confirmation first, since blocks
+// the new TJA no longer has go with their scores.
+export function UploadPage({
+  existing,
+  embedded = false,
+}: {
+  existing?: Chart
+  embedded?: boolean
+}) {
   const { t } = useTranslation()
   const { notify } = useNotification()
   const session = useSession(),
@@ -49,12 +106,18 @@ export function UploadPage({ embedded = false }: { embedded?: boolean }) {
   const [title, setTitle] = useState(''),
     [subtitle, setSubtitle] = useState(''),
     [bpm, setBpm] = useState('')
-  const [nijiiroId, setNijiiroId] = useState(''),
-    [officialId, setOfficialId] = useState('')
-  const [categoryIds, setCategoryIds] = useState<string[]>([])
-  const [description, setDescription] = useState(''),
+  const [nijiiroId, setNijiiroId] = useState(
+      existing?.nijiiroId != null ? String(existing.nijiiroId) : '',
+    ),
+    [officialId, setOfficialId] = useState(existing?.officialId ?? '')
+  const [categoryIds, setCategoryIds] = useState<string[]>(existing?.categoryIds ?? [])
+  const [description, setDescription] = useState(existing?.description ?? ''),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(0)
+  const [confirming, setConfirming] = useState(false)
+  // The audio of a chart that has files stays unless a new one is chosen.
+  const replacing = !!existing?.hasFiles
+  const retainedAudioName = replacing ? existing!.audioName : undefined
   const requestKey = useRef(createRequestKey()),
     controller = useRef<AbortController | null>(null)
   useEffect(() => () => controller.current?.abort(), [])
@@ -102,7 +165,7 @@ export function UploadPage({ embedded = false }: { embedded?: boolean }) {
         : audio && (!audio.size || audio.size > maxAudio)
           ? t('db.audioTooLarge')
           : ''
-  const ready = mode === 'song' ? !!title.trim() : !!tja && !!audio
+  const ready = mode === 'song' ? !!title.trim() : !!tja && (!!audio || !!retainedAudioName)
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (!ready || busy || fileError) return
@@ -118,6 +181,11 @@ export function UploadPage({ embedded = false }: { embedded?: boolean }) {
       notify(t('db.songFieldsInvalid'), 'error')
       return
     }
+    if (replacing) setConfirming(true)
+    else await save()
+  }
+  const save = async () => {
+    setConfirming(false)
     setBusy(true)
     setProgress(0)
     const abort = new AbortController()
@@ -130,23 +198,29 @@ export function UploadPage({ embedded = false }: { embedded?: boolean }) {
         form.append('bpm', bpm.trim())
       } else {
         form.append('tja', tja!)
-        form.append('audio', audio!)
+        if (audio) form.append('audio', audio)
       }
       if (cover) form.append('cover', cover)
+      if (replacing) form.append('confirmReset', 'true')
       form.append('description', description)
       form.append('categoryIds', JSON.stringify(categoryIds))
       form.append('nijiiroId', nijiiroId.trim())
-      form.append('officialId', official)
+      form.append('officialId', officialId.trim())
       const chart = await uploadChart(
         form,
         session.csrfToken,
         requestKey.current,
         abort.signal,
         setProgress,
+        existing?.id,
       )
       navigate(`/charts/${chart.id}`)
       notify(
-        mode === 'song' ? t('messages.songRegistered') : t('messages.chartPublished'),
+        existing
+          ? t(replacing ? 'db.chartFilesReplaced' : 'messages.chartFilesUploaded')
+          : mode === 'song'
+            ? t('messages.songRegistered')
+            : t('messages.chartPublished'),
         'success',
       )
     } catch (e) {
@@ -168,7 +242,9 @@ export function UploadPage({ embedded = false }: { embedded?: boolean }) {
               ? file.name
               : kind === 'tja'
                 ? t('messages.tjaUpTo2Mib')
-                : t('messages.oggMp3UpTo100Mib')}
+                : retainedAudioName
+                  ? t('messages.keepAudio', { filename: retainedAudioName })
+                  : t('messages.oggMp3UpTo100Mib')}
           </small>
         </span>
         {file ? (
@@ -188,27 +264,54 @@ export function UploadPage({ embedded = false }: { embedded?: boolean }) {
       </Label>
     )
   }
+  const existingTitle = existing ? chartText(existing, i18n.resolvedLanguage).title : ''
   return (
     <>
       <div className="[&_p]:mt-2 [&_p]:text-sm [&_p]:text-muted-foreground">
         {!embedded && (
-          <h1 className="text-2xl font-extrabold sm:text-3xl">{t('db.uploadTitle')}</h1>
+          <h1 className="text-2xl font-extrabold sm:text-3xl">
+            {existing
+              ? replacing
+                ? t('messages.updateSongAndCharts')
+                : t('db.uploadChartFiles')
+              : t('db.uploadTitle')}
+          </h1>
         )}
-        {mode === 'song' && <p>{t('db.songOnlyText')}</p>}
+        {existing ? (
+          <p>
+            {replacing
+              ? t('messages.replaceSongHint', { title: existingTitle })
+              : t('db.uploadChartFilesText')}
+          </p>
+        ) : (
+          mode === 'song' && <p>{t('db.songOnlyText')}</p>
+        )}
       </div>
-      <Tabs
-        value={mode}
-        onValueChange={(value) => {
-          if (busy) return
-          requestKey.current = createRequestKey()
-          setMode(value as UploadMode)
-        }}
-      >
-        <TabsList aria-label={t('db.uploadMode')}>
-          <TabsTrigger value="files">{t('db.uploadModeFiles')}</TabsTrigger>
-          <TabsTrigger value="song">{t('db.uploadModeSong')}</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {!existing && (
+        <Tabs
+          value={mode}
+          onValueChange={(value) => {
+            if (busy) return
+            requestKey.current = createRequestKey()
+            setMode(value as UploadMode)
+          }}
+        >
+          <TabsList aria-label={t('db.uploadMode')}>
+            <TabsTrigger value="files">{t('db.uploadModeFiles')}</TabsTrigger>
+            <TabsTrigger value="song">{t('db.uploadModeSong')}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+      {replacing && (
+        <Card
+          className="min-w-0 gap-3 border border-destructive/30 p-5 shadow-none sm:p-6 [&>h2]:text-destructive [&>p]:text-sm [&>p]:leading-relaxed"
+          aria-label={t('messages.beforeUpdating')}
+        >
+          <h2 className="text-base font-extrabold">{t('messages.beforeUpdating')}</h2>
+          <p>{t('db.replaceChartFilesScores')}</p>
+          <p>{t('messages.theSongUrlStaysTheSameTitlesComeFromTheNewTja')}</p>
+        </Card>
+      )}
       <form className="space-y-6" onSubmit={submit}>
         {mode === 'song' ? (
           <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
@@ -255,12 +358,33 @@ export function UploadPage({ embedded = false }: { embedded?: boolean }) {
             onDragOver={(e) => e.preventDefault()}
             onDrop={drop}
           >
-            <h2 className="text-base font-extrabold">{t('db.uploadFiles')}</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-base font-extrabold">{t('db.uploadFiles')}</h2>
+              <span className="text-sm text-muted-foreground">
+                {retainedAudioName
+                  ? t('messages.newTjaRequiredCurrentAudioCanBeKept')
+                  : t('messages.bothFilesAreRequired')}
+              </span>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               {fileTile('tja')}
               {fileTile('audio')}
             </div>
-            <p className="text-sm text-muted-foreground">{t('db.uploadWaveHint')}</p>
+            {retainedAudioName && audio && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="default"
+                className="self-start"
+                disabled={busy}
+                onClick={() => choose('audio', null)}
+              >
+                {t('messages.currentAudio', { filename: retainedAudioName })}
+              </Button>
+            )}
+            <p className="text-sm text-muted-foreground">
+              {retainedAudioName && !audio ? t('db.replaceWaveHint') : t('db.uploadWaveHint')}
+            </p>
             {fileError && (
               <p role="alert" className="text-sm text-destructive">
                 {fileError}
@@ -310,7 +434,7 @@ export function UploadPage({ embedded = false }: { embedded?: boolean }) {
           <div className="space-y-2" role="status">
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-              {t('messages.publishingChart')}
+              {existing && replacing ? t('messages.updatingSong') : t('messages.publishingChart')}
             </p>
             <Progress value={progress} />
           </div>
@@ -318,9 +442,15 @@ export function UploadPage({ embedded = false }: { embedded?: boolean }) {
         <div className="flex flex-wrap gap-3">
           <Button type="submit" size="lg" disabled={!ready || busy || !!fileError}>
             <Upload size={17} aria-hidden="true" />
-            {mode === 'song' ? t('db.registerSong') : t('db.upload')}
+            {existing
+              ? replacing
+                ? t('messages.updateSongAndCharts')
+                : t('db.upload')
+              : mode === 'song'
+                ? t('db.registerSong')
+                : t('db.upload')}
           </Button>
-          {busy && (
+          {busy ? (
             <Button
               type="button"
               variant="outline"
@@ -329,9 +459,38 @@ export function UploadPage({ embedded = false }: { embedded?: boolean }) {
             >
               {t('messages.cancel')}
             </Button>
+          ) : (
+            existing && (
+              <Link
+                className={buttonVariants({ variant: 'outline', size: 'lg' })}
+                to={`/charts/${existing.id}`}
+              >
+                {t('messages.cancel')}
+              </Link>
+            )
           )}
         </div>
       </form>
+      {confirming && existing && (
+        <Modal
+          title={t('editor.confirmTitle')}
+          alert
+          onDismiss={() => setConfirming(false)}
+          actions={
+            <>
+              <DialogClose render={<Button type="button" variant="outline" size="default" />}>
+                {t('messages.cancel')}
+              </DialogClose>
+              <Button type="button" variant="default" size="default" onClick={() => void save()}>
+                {t('editor.confirm')}
+              </Button>
+            </>
+          }
+        >
+          <p>{t('db.replaceConfirmText', { title: existingTitle })}</p>
+          <p>{t('db.replaceChartFilesScores')}</p>
+        </Modal>
+      )}
     </>
   )
 }

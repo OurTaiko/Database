@@ -13,6 +13,7 @@ import { UsersPage } from './users'
 import { UserSpacePage } from './user-space'
 import { NotificationsPage } from './notification-center'
 import { ChartEditorPage } from './chart-editor'
+import { UpdatePage } from './upload'
 import { NotificationProvider } from './notifications'
 import { CategoryProvider } from './categories'
 import { ProfilePage } from './profile'
@@ -47,6 +48,7 @@ function App() {
                         />
                         <Route path="charts/:id" element={<Detail />} />
                         <Route path="charts/:id/comments/:commentId" element={<Detail />} />
+                        <Route path="charts/:id/update" element={<UpdatePage />} />
                         <Route path="charts/:id/edit" element={<ChartEditorPage />} />
                         <Route path="playlists" element={<PlaylistsPage />} />
                         <Route path="dans" element={<DansPage />} />

@@ -33,7 +33,6 @@ import { defaultDifficulty, hasConstants } from './chart-difficulty'
 import { DifficultyConstants } from './difficulty-constants'
 import { useSession } from './session-context'
 import { EditMetadata } from './edit-metadata'
-import { UploadFilesDialog } from './upload-files-dialog'
 import { ChartActivity, type ActivityTab } from './chart-activity'
 import { CommentSection, chartSubject } from './comments'
 import { VoteControl } from '@/components/vote-control'
@@ -300,7 +299,6 @@ export function Detail() {
     [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [coverEditing, setCoverEditing] = useState(false)
-  const [filesUploading, setFilesUploading] = useState(false)
   const [collecting, setCollecting] = useState(false)
   // The block the chart area shows (block key); empty for the default one.
   const [chosenCourse, setChosenCourse] = useState('')
@@ -314,7 +312,6 @@ export function Detail() {
     setError('')
     setEditing(false)
     setCoverEditing(false)
-    setFilesUploading(false)
     setConfirm(false)
     setChosenCourse('')
     setActivityTab('image')
@@ -451,14 +448,13 @@ export function Detail() {
                 </a>
               </>
             ) : canManage ? (
-              <Button
-                size="lg"
-                className="h-11 flex-1 px-5 sm:flex-none"
-                onClick={() => setFilesUploading(true)}
+              <Link
+                className={cn(buttonVariants({ size: 'lg' }), 'h-11 flex-1 px-5 sm:flex-none')}
+                to={`/charts/${chart.id}/update`}
               >
                 <UploadSimpleIcon size={18} aria-hidden="true" />
                 {t('db.uploadChartFiles')}
-              </Button>
+              </Link>
             ) : null}
             {session.user && (
               <Button
@@ -536,17 +532,6 @@ export function Detail() {
           }}
         />
       )}
-      {filesUploading && canManage && (
-        <UploadFilesDialog
-          key={chart.id}
-          chart={chart}
-          onDismiss={() => setFilesUploading(false)}
-          onSaved={(updated) => {
-            setChart(updated)
-            notify(t('messages.chartFilesUploaded'), 'success')
-          }}
-        />
-      )}
       {coverEditing && canManage && (
         <CoverDialog
           chart={chart}
@@ -621,10 +606,13 @@ export function Detail() {
                   {canManage ? t('db.noFilesManagerText') : t('db.noFilesText')}
                 </p>
                 {canManage && (
-                  <Button variant="outline" onClick={() => setFilesUploading(true)}>
+                  <Link
+                    className={buttonVariants({ variant: 'outline' })}
+                    to={`/charts/${chart.id}/update`}
+                  >
                     <UploadSimpleIcon size={16} aria-hidden="true" />
                     {t('db.uploadChartFiles')}
-                  </Button>
+                  </Link>
                 )}
               </section>
             )}
@@ -751,7 +739,16 @@ export function Detail() {
                 {t('messages.manageChart')}
               </h2>
               <ul className="divide-y">
-                {chart.hasFiles ? (
+                <li>
+                  <Link className={manageItemClassName} to={`/charts/${chart.id}/update`}>
+                    {chart.hasFiles ? t('messages.updateSongAndCharts') : t('db.uploadChartFiles')}
+                    <CaretRightIcon
+                      className="size-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  </Link>
+                </li>
+                {chart.hasFiles && (
                   <li>
                     <Link className={manageItemClassName} to={`/charts/${chart.id}/edit`}>
                       {t('editor.open')}
@@ -760,20 +757,6 @@ export function Detail() {
                         aria-hidden="true"
                       />
                     </Link>
-                  </li>
-                ) : (
-                  <li>
-                    <button
-                      type="button"
-                      className={manageItemClassName}
-                      onClick={() => setFilesUploading(true)}
-                    >
-                      {t('db.uploadChartFiles')}
-                      <CaretRightIcon
-                        className="size-4 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                    </button>
                   </li>
                 )}
                 <li>
