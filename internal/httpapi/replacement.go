@@ -21,9 +21,13 @@ var replacementFields = append(append([]string{}, uploadFields...), "confirmRese
 
 // replaceFiles replaces a chart's TJA and optionally its audio and cover,
 // keeping its ID, uploader and creation time: the contract of Fanmade's
-// PUT /charts/{id}/files. The audio is kept when none is sent. Blocks the new
-// TJA no longer has go with their scores; scores of the remaining blocks stay
-// and stop being the latest when a file changed (trigger charts_retire_scores).
+// PUT /charts/{id}/files. The audio is kept when none is sent. Scores are
+// judged block by block (SetDifficulties): a block the new TJA no longer has
+// goes with its scores; a remaining block whose TJAParser content hash changed
+// keeps its scores but they stop being the latest (trigger
+// chart_difficulties_retire_scores), and an unchanged block is left alone, so
+// header-only edits such as titles touch no score. A new audio retires the
+// scores of every block (trigger charts_retire_scores).
 // A song registered without files (R038) gets its first TJA and audio here;
 // both are then required, and there is nothing to confirm.
 func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {

@@ -519,7 +519,6 @@
     "noFilesManagerText": "This song is registered, but its TJA and audio have not been uploaded yet. Once uploaded, the title, subtitle, BPM and difficulties come from the TJA.",
     "uploadChartFiles": "Upload chart files",
     "uploadChartFilesText": "Choose this song's TJA and its audio. Once stored, the title, subtitle, BPM and difficulties come from the TJA and replace what was entered before.",
-    "replaceChartFilesScores": "Blocks the new TJA no longer has are deleted with their scores; the other old scores stay but no longer count for the latest version. The old files are replaced only after the new ones are validated and saved.",
     "replaceConfirmText": "The chosen files replace the TJA of \"{{title}}\"; the current audio is kept when no new audio is chosen.",
     "replaceWaveHint": "When the current audio is kept, the TJA's WAVE can name any file; once stored it is rewritten to the audio's hash file name.",
     "chartFilesReplaced": "Chart files updated",
@@ -642,7 +641,7 @@
     "discard": "Discard changes",
     "save": "Save and replace",
     "confirmTitle": "Replace the current chart?",
-    "confirmText": "The TJA of “{{title}}” will be replaced with the edited text. Blocks the new text no longer has are deleted together with their scores; other previous scores stay but no longer count for the latest version.",
+    "confirmText": "The TJA of “{{title}}” will be replaced with the edited text. On blocks whose content changed, all players' old scores stay but no longer count on the leaderboard; unchanged blocks are not affected; blocks the new text no longer has are deleted together with their scores.",
     "confirm": "Replace",
     "saved": "Chart saved",
     "onlyManagers": "Only the uploader or an administrator can edit this chart"

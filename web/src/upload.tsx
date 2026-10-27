@@ -307,8 +307,10 @@ export function UploadPage({
           className="min-w-0 gap-3 border border-destructive/30 p-5 shadow-none sm:p-6 [&>h2]:text-destructive [&>p]:text-sm [&>p]:leading-relaxed"
           aria-label={t('messages.beforeUpdating')}
         >
-          <h2 className="text-base font-extrabold">{t('messages.beforeUpdating')}</h2>
-          <p>{t('db.replaceChartFilesScores')}</p>
+          <h2 className="text-base font-extrabold">
+            {t('messages.updatingDeletesAllPreviousScores')}
+          </h2>
+          <p>{t('messages.theNewTjaReplacesEveryChartInThisSongAllPlayersScores')}</p>
           <p>{t('messages.theSongUrlStaysTheSameTitlesComeFromTheNewTja')}</p>
         </Card>
       )}
@@ -473,7 +475,7 @@ export function UploadPage({
       </form>
       {confirming && existing && (
         <Modal
-          title={t('editor.confirmTitle')}
+          title={t('messages.replaceSongAndDeleteAllPreviousScores')}
           alert
           onDismiss={() => setConfirming(false)}
           actions={
@@ -488,7 +490,7 @@ export function UploadPage({
           }
         >
           <p>{t('db.replaceConfirmText', { title: existingTitle })}</p>
-          <p>{t('db.replaceChartFilesScores')}</p>
+          <p>{t('messages.allPlayersPreviousScoresChartsAndFilesForThisSongWillBe')}</p>
         </Modal>
       )}
     </>
