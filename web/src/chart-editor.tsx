@@ -168,7 +168,7 @@ export function ChartEditorPage() {
     [chart, blocks.keys],
   )
 
-  // The record is not sent and stays; only the names follow the new text unless kept.
+  // The record is not sent and stays; the names and preview range follow the new text unless kept.
   const proposal = (current: Chart) => ({
     description: current.description,
     categoryIds: current.categoryIds,
@@ -202,7 +202,7 @@ export function ChartEditorPage() {
         file,
         preview,
         review: reviewReplacement(chart, preview, proposal(chart), false, {
-          demo: false,
+          demo: true,
           makers: false,
         }),
       })
@@ -219,7 +219,12 @@ export function ChartEditorPage() {
     setProgress(0)
     controller.current = new AbortController()
     try {
-      const { keepTitles } = replacementFields(chart, preview, proposal(chart), kept)
+      const { keepTitles, demoStart, demoEnd } = replacementFields(
+        chart,
+        preview,
+        proposal(chart),
+        kept,
+      )
       // Other text or choices are a different request; the same ones retry the last.
       const attempt = [...kept].sort().join(',') + '\n' + text
       if (attempt !== attempted.current) requestKey.current = createRequestKey()
@@ -229,6 +234,11 @@ export function ChartEditorPage() {
       form.append('encoding', 'utf-8')
       form.append('confirmReset', 'true')
       if (keepTitles) form.append('keepTitles', 'true')
+      // Only a kept range is sent; otherwise the server takes the new text's DEMOSTART.
+      if (kept.has('demo')) {
+        form.append('demoStart', String(demoStart))
+        form.append('demoEnd', String(demoEnd))
+      }
       const updated = await uploadChart(
         form,
         session.csrfToken,

@@ -122,8 +122,30 @@ func TestReplacementPreview(t *testing.T) {
 	if rec = send("owner", "PUT", path, renamed, map[string]string{"confirmReset": "true", "keepTitles": "true"}); rec.Code != 200 || title() != "Original" {
 		t.Fatal("keepTitles replaced the name", rec.Code, rec.Body.String(), title())
 	}
+	demo := func() string {
+		t.Helper()
+		var start, end float64
+		if err := s.DB.QueryRow(ctx, `SELECT demo_start,demo_end FROM charts WHERE id=$1`, w.song).Scan(&start, &end); err != nil {
+			t.Fatal(err)
+		}
+		return fmt.Sprint(start, "-", end)
+	}
+	// The preview range is the site's to set within the audio (10 s here), and a replacement
+	// that sends it keeps it; one that does not takes the TJA's DEMOSTART again.
+	if code := w.c.do("owner", "PATCH", w.chart(w.song), `{"demoStart":2,"demoEnd":6}`, nil); code != 200 || demo() != "2-6" {
+		t.Fatal("preview range not set", code, demo())
+	}
+	if code := w.c.do("owner", "PATCH", w.chart(w.song), `{"demoStart":12}`, nil); code != 422 || demo() != "2-6" {
+		t.Fatal("a range past the audio was accepted", code, demo())
+	}
 	renamedAgain := renamed + "COURSE:Oni\nLEVEL:8\n#START\n1100,\n#END\n"
-	if rec = send("owner", "PUT", path, renamedAgain, map[string]string{"confirmReset": "true"}); rec.Code != 200 || title() != "Renamed" {
-		t.Fatal("the new file's name was not taken", rec.Code, rec.Body.String(), title())
+	if rec = send("owner", "PUT", path, renamedAgain, map[string]string{"confirmReset": "true", "keepTitles": "true", "demoStart": "2", "demoEnd": "6"}); rec.Code != 200 || demo() != "2-6" {
+		t.Fatal("the sent preview range was not kept", rec.Code, rec.Body.String(), demo())
+	}
+	if code := send("owner", "PUT", path, renamed, map[string]string{"confirmReset": "true", "demoStart": "11"}).Code; code != 422 {
+		t.Fatal("a range past the audio was stored", code)
+	}
+	if rec = send("owner", "PUT", path, renamed, map[string]string{"confirmReset": "true"}); rec.Code != 200 || title() != "Renamed" || demo() != "0-15" {
+		t.Fatal("the new file's name and DEMOSTART were not taken", rec.Code, rec.Body.String(), title(), demo())
 	}
 }

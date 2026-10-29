@@ -19,6 +19,7 @@ import {
   UploadSimpleIcon as Upload,
 } from '@phosphor-icons/react'
 import { CoverPicker } from '@/components/cover-picker'
+import { AudioPlayer } from '@/components/audio-player'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CategoryPicker } from './categories'
 import { api, previewReplacement, uploadChart } from './api/client'
@@ -39,6 +40,15 @@ function createRequestKey() {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 type UploadMode = 'files' | 'song'
+
+/** The TJA's DEMOSTART as the server reads it: a header line before the first #START; 0 when absent. */
+async function fileDemoStart(tja: File) {
+  // The header is ASCII in every encoding the site accepts, so Latin-1 reads it.
+  const text = new TextDecoder('latin1').decode(await tja.slice(0, 256 * 1024).arrayBuffer())
+  const header = text.split(/#START/i)[0]
+  const match = /^\s*DEMOSTART\s*:\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*$/im.exec(header)
+  return match ? Number(match[1]) : 0
+}
 
 /**
  * Replaces a chart's files through the upload page, as on Fanmade: the page
@@ -128,7 +138,44 @@ export function UploadPage({
   const retainedAudioName = replacing ? existing!.audioName : undefined
   const requestKey = useRef(createRequestKey()),
     controller = useRef<AbortController | null>(null)
+  // The preview range starts as the new TJA's DEMOSTART for 15 seconds, as on Fanmade.
+  const [fileDemo, setFileDemo] = useState<number | null>(null)
+  const [demoStart, setDemoStart] = useState('0'),
+    [demoEnd, setDemoEnd] = useState('15')
+  const [audioUrl, setAudioUrl] = useState('')
+  const [audioDuration, setAudioDuration] = useState<number | null>(null)
   useEffect(() => () => controller.current?.abort(), [])
+  useEffect(() => {
+    let active = true
+    setFileDemo(null)
+    if (!tja) return
+    void fileDemoStart(tja).then((start) => {
+      if (!active) return
+      setFileDemo(start)
+      setDemoStart(String(start))
+      setDemoEnd(String(start + 15))
+    })
+    return () => {
+      active = false
+    }
+  }, [tja])
+  useEffect(() => {
+    setAudioUrl('')
+    setAudioDuration(null)
+    if (!audio) return
+    const url = URL.createObjectURL(audio)
+    setAudioUrl(url)
+    const player = new Audio(url)
+    player.preload = 'metadata'
+    player.onloadedmetadata = () => {
+      if (Number.isFinite(player.duration)) setAudioDuration(player.duration)
+    }
+    return () => {
+      player.onloadedmetadata = null
+      player.removeAttribute('src')
+      URL.revokeObjectURL(url)
+    }
+  }, [audio])
   if (session.loading) return <p role="status">{t('messages.loadingAccount')}</p>
   // Only users holding the upload permission get the upload interface.
   if (!session.user?.canUpload)
@@ -189,19 +236,41 @@ export function UploadPage({
       notify(t('db.songFieldsInvalid'), 'error')
       return
     }
+    if (mode === 'files' && !validPreview()) {
+      notify(t('messages.previewRangeInvalid'), 'error')
+      return
+    }
     if (replacing) await startReview()
     else await save()
   }
-  // The preview range and makers follow the file here; the record is what the form says.
+  const validPreview = () => {
+    const start = Number(demoStart),
+      end = Number(demoEnd)
+    const duration = audio ? audioDuration : retainedAudioName ? existing!.duration : null
+    return (
+      !!demoStart.trim() &&
+      !!demoEnd.trim() &&
+      Number.isFinite(start) &&
+      Number.isFinite(end) &&
+      start >= 0 &&
+      (duration == null || start < duration) &&
+      end > start &&
+      end <= 1215
+    )
+  }
+  // The range was typed rather than left at the new file's DEMOSTART.
+  const typedDemo =
+    fileDemo === null || demoStart !== String(fileDemo) || demoEnd !== String(fileDemo + 15)
+  // Makers always follow the file here; the record is what the form says.
   const proposal = (): Proposal => ({
     description,
     categoryIds,
     nijiiroId: nijiiroId.trim(),
     officialId: officialId.trim(),
-    demoStart: 0,
-    demoEnd: 0,
+    demoStart: Number(demoStart),
+    demoEnd: Number(demoEnd),
     typedMakers: {},
-    typedDemo: false,
+    typedDemo,
   })
   const startReview = async () => {
     const abort = new AbortController()
@@ -217,7 +286,7 @@ export function UploadPage({
         preview,
         audioChanged,
         review: reviewReplacement(existing!, preview, proposal(), audioChanged, {
-          demo: false,
+          demo: true,
           makers: false,
         }),
       })
@@ -238,6 +307,8 @@ export function UploadPage({
             categoryIds,
             nijiiroId: nijiiroId.trim(),
             officialId: officialId.trim(),
+            demoStart: Number(demoStart),
+            demoEnd: Number(demoEnd),
           }
     // Other choices are a different request; the same choices retry the last one.
     const choices = [...kept].sort().join(',')
@@ -264,6 +335,11 @@ export function UploadPage({
       form.append('categoryIds', JSON.stringify(fields.categoryIds))
       form.append('nijiiroId', fields.nijiiroId)
       form.append('officialId', fields.officialId)
+      // A typed or kept range is sent; otherwise the server takes the new file's DEMOSTART.
+      if (mode === 'files' && (typedDemo || kept.has('demo'))) {
+        form.append('demoStart', String(fields.demoStart))
+        form.append('demoEnd', String(fields.demoEnd))
+      }
       const chart = await uploadChart(
         form,
         session.csrfToken,
@@ -451,6 +527,48 @@ export function UploadPage({
               </p>
             )}
             <CoverPicker file={cover} onChange={setCover} disabled={busy} />
+          </Card>
+        )}
+        {mode === 'files' && tja && (
+          <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
+            <h2 className="text-base font-extrabold">{t('messages.previewRange')}</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Label htmlFor="upload-demo-start" className="flex flex-col items-start gap-2">
+                {t('messages.previewStartSeconds')}
+                <Input
+                  id="upload-demo-start"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={demoStart}
+                  disabled={busy}
+                  onChange={(e) => setDemoStart(e.target.value)}
+                />
+              </Label>
+              <Label htmlFor="upload-demo-end" className="flex flex-col items-start gap-2">
+                {t('messages.previewEndSeconds')}
+                <Input
+                  id="upload-demo-end"
+                  type="number"
+                  min="0"
+                  max="1215"
+                  step="any"
+                  value={demoEnd}
+                  disabled={busy}
+                  onChange={(e) => setDemoEnd(e.target.value)}
+                />
+              </Label>
+            </div>
+            {(audioUrl || retainedAudioName) && (
+              <AudioPlayer
+                label={t('messages.audioPreview')}
+                src={audioUrl || endpoints.resource(existing!, 'audio')}
+                startAt={demoStart.trim() ? Number(demoStart) : NaN}
+                endAt={demoEnd.trim() ? Number(demoEnd) : NaN}
+                knownDuration={audio ? (audioDuration ?? undefined) : existing?.duration}
+                disabled={busy || Number(demoEnd) > 1215}
+              />
+            )}
           </Card>
         )}
         <Card className="min-w-0 gap-5 border-[1.5px] border-border p-5 shadow-none sm:p-6">

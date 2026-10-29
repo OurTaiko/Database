@@ -86,6 +86,13 @@ func (s *Server) streamAudio(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// streamPreview sends the game's song-select preview clip.
+func (s *Server) streamPreview(w http.ResponseWriter, r *http.Request) {
+	if key, _, digest, ok := s.publishedFile(w, r, "preview_file"); ok {
+		s.serveObject(w, r, key, "preview.ogg", digest, "audio/ogg", "inline")
+	}
+}
+
 func (s *Server) getCover(w http.ResponseWriter, r *http.Request) {
 	key, _, digest, ok := s.publishedFile(w, r, "cover_file")
 	if !ok {

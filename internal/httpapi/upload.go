@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math"
 	"mime"
 	"net/http"
 	"os"
@@ -81,7 +82,7 @@ func identifiers(nijiiro, official string) (*int32, *string, bool) {
 // Text fields a chart submission may carry besides its files. title,
 // subtitle and bpm describe a song registered without files (R038); with a
 // TJA they are ignored, as the file is the source of those.
-var uploadFields = []string{"encoding", "description", "categoryIds", "nijiiroId", "officialId", "title", "subtitle", "bpm"}
+var uploadFields = []string{"encoding", "description", "categoryIds", "nijiiroId", "officialId", "title", "subtitle", "bpm", "demoStart", "demoEnd"}
 
 // receiveUploadForm stages the multipart files tja, audio and cover of a
 // submission in dir and collects the text fields named in allowed. On a bad
@@ -282,15 +283,15 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tf.sha, tf.size = hash(string(data)), int64(len(data))
-	demoStart := meta.DemoStart
-	if demoStart < 0 || demoStart >= duration {
-		demoStart = 0
+	demoStart, demoEnd, ok := previewRange(w, fields, meta.DemoStart, duration)
+	if !ok {
+		return
 	}
 	coverSHA := ""
 	if coverData != nil {
 		coverSHA = hash(string(coverData))
 	}
-	payload := hash(strings.Join([]string{tf.sha, af.sha, coverSHA, description, strings.Join(categoryIDs, ","), fields["nijiiroId"], fields["officialId"]}, "\n"))
+	payload := hash(strings.Join([]string{tf.sha, af.sha, coverSHA, description, strings.Join(categoryIDs, ","), fields["nijiiroId"], fields["officialId"], fields["demoStart"], fields["demoEnd"]}, "\n"))
 
 	ctx := context.WithoutCancel(r.Context())
 	tx, e := s.DB.Begin(ctx)
@@ -348,7 +349,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	var id int64
 	e = tx.QueryRow(ctx, `INSERT INTO charts(nijiiro_id,official_id,uploader_id,tja_file,audio_file,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end)
  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
-		nijiiroID, officialID, u.User.ID, tjaFile, audioFile, coverFile, description, meta.Title, meta.Subtitle, meta.BPM, meta.Offset, demoStart, duration, titles, subtitles, flags, demoStart+15).Scan(&id)
+		nijiiroID, officialID, u.User.ID, tjaFile, audioFile, coverFile, description, meta.Title, meta.Subtitle, meta.BPM, meta.Offset, demoStart, duration, titles, subtitles, flags, demoEnd).Scan(&id)
 	if e == nil {
 		e = database.SetDifficulties(ctx, tx, id, meta.Difficulties)
 	}
@@ -364,6 +365,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		internal(w, e)
 		return
 	}
+	s.previewAfter(ctx, id, af.path)
 	c, e := s.chart(ctx, id)
 	if e != nil {
 		internal(w, e)
@@ -537,6 +539,9 @@ type metadataPatch struct {
 	OfficialID           json.RawMessage `json:"officialId"`
 	TitleTranslations    json.RawMessage `json:"titleTranslations"`
 	SubtitleTranslations json.RawMessage `json:"subtitleTranslations"`
+	// The preview range in seconds, within the audio; a chart without files has none to set.
+	DemoStart json.RawMessage `json:"demoStart"`
+	DemoEnd   json.RawMessage `json:"demoEnd"`
 }
 
 func validDisplayText(s string) bool {
@@ -665,6 +670,25 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	demoStart, demoEnd := c.DemoStart, c.DemoEnd
+	if len(patch.DemoStart)+len(patch.DemoEnd) > 0 {
+		if !c.HasFiles {
+			problem(w, 422, "METADATA_LOCKED", "没有音频的乐曲不能设置试听范围")
+			return
+		}
+		for _, field := range []struct {
+			raw   json.RawMessage
+			value *float64
+		}{{patch.DemoStart, &demoStart}, {patch.DemoEnd, &demoEnd}} {
+			if len(field.raw) > 0 && (isNull(field.raw) || json.Unmarshal(field.raw, field.value) != nil) {
+				*field.value = math.NaN()
+			}
+		}
+		if !audio.ValidPreviewRange(demoStart, demoEnd, c.Duration) {
+			problem(w, 422, "PREVIEW_RANGE_INVALID", "试听起点必须位于音频内，终点须晚于起点且不超过 1215 秒")
+			return
+		}
+	}
 	if !patchTranslations(patch.TitleTranslations, c.TitleTranslations) || !patchTranslations(patch.SubtitleTranslations, c.SubtitleTranslations) {
 		problem(w, 422, "TRANSLATIONS_INVALID", "译名必须为 en / ja / zh / ko 到不超过 500 字节文本的映射")
 		return
@@ -672,8 +696,8 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 	titles, _ := json.Marshal(c.TitleTranslations)
 	subtitles, _ := json.Marshal(c.SubtitleTranslations)
 	// update_at is refreshed by the charts trigger only when something changed.
-	tag, e := s.DB.Exec(r.Context(), `UPDATE charts c SET description=$2,category_flags=$3,nijiiro_id=$4,official_id=$5,title_translations=$6,subtitle_translations=$7,title=$8,subtitle=$9,bpm=$10 WHERE c.id=$1 AND `+publishedChart,
-		c.ID, description, flags, nijiiroID, officialID, titles, subtitles, title, subtitle, bpm)
+	tag, e := s.DB.Exec(r.Context(), `UPDATE charts c SET description=$2,category_flags=$3,nijiiro_id=$4,official_id=$5,title_translations=$6,subtitle_translations=$7,title=$8,subtitle=$9,bpm=$10,demo_start=$11,demo_end=$12 WHERE c.id=$1 AND `+publishedChart,
+		c.ID, description, flags, nijiiroID, officialID, titles, subtitles, title, subtitle, bpm, demoStart, demoEnd)
 	if e != nil {
 		internal(w, e)
 		return
@@ -681,6 +705,9 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 	if tag.RowsAffected() == 0 {
 		problem(w, 404, "CHART_NOT_FOUND", "谱面不存在或已删除")
 		return
+	}
+	if demoStart != c.DemoStart || demoEnd != c.DemoEnd {
+		s.previewAfter(r.Context(), c.ID, "")
 	}
 	updated, e := s.chart(r.Context(), c.ID)
 	if e != nil {

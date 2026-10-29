@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -18,6 +20,36 @@ import (
 
 // Text fields a replacement may carry; omitted ones keep the chart's values.
 var replacementFields = append(append([]string{}, uploadFields...), "confirmReset", "keepTitles")
+
+// previewRange is the preview range of an upload: the one sent, which must lie
+// within the audio, or else the TJA's DEMOSTART (0 when outside the audio) for
+// 15 seconds. It reports false after writing the error response.
+func previewRange(w http.ResponseWriter, fields map[string]string, fileStart, duration float64) (float64, float64, bool) {
+	start := fileStart
+	if start < 0 || start >= duration {
+		start = 0
+	}
+	end := start + 15
+	number := func(field string) float64 {
+		n, err := strconv.ParseFloat(strings.TrimSpace(fields[field]), 64)
+		if err != nil {
+			return math.NaN()
+		}
+		return n
+	}
+	if _, sent := fields["demoStart"]; sent {
+		start = number("demoStart")
+		end = start + 15
+	}
+	if _, sent := fields["demoEnd"]; sent {
+		end = number("demoEnd")
+	}
+	if !audio.ValidPreviewRange(start, end, duration) {
+		problem(w, 422, "PREVIEW_RANGE_INVALID", "试听起点必须位于音频内，终点须晚于起点且不超过 1215 秒")
+		return 0, 0, false
+	}
+	return start, end, true
+}
 
 // replaceFiles replaces a chart's TJA and optionally its audio and cover,
 // keeping its ID, uploader and creation time: the contract of Fanmade's
@@ -163,9 +195,9 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tf.sha, tf.size = hash(string(data)), int64(len(data))
-	demoStart := meta.DemoStart
-	if demoStart < 0 || demoStart >= duration {
-		demoStart = 0
+	demoStart, demoEnd, ok := previewRange(w, fields, meta.DemoStart, duration)
+	if !ok {
+		return
 	}
 	audioSHA, coverSHA := c.AudioHash, ""
 	if af != nil {
@@ -177,7 +209,7 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 	// Hashes only what was sent, so a retry is answered before the files are
 	// judged again, and the receipt's file hashes tell whether a later
 	// replacement has superseded it.
-	payload := hash(strings.Join([]string{"replace", r.PathValue("id"), tf.sha, audioSHA, coverSHA, fields["description"], fields["categoryIds"], fields["nijiiroId"], fields["officialId"], fields["keepTitles"]}, "\n"))
+	payload := hash(strings.Join([]string{"replace", r.PathValue("id"), tf.sha, audioSHA, coverSHA, fields["description"], fields["categoryIds"], fields["nijiiroId"], fields["officialId"], fields["keepTitles"], fields["demoStart"], fields["demoEnd"]}, "\n"))
 
 	ctx := context.WithoutCancel(r.Context())
 	tx, e := s.DB.Begin(ctx)
@@ -262,7 +294,7 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
  title=CASE WHEN $18 THEN title ELSE $9 END,subtitle=CASE WHEN $18 THEN subtitle ELSE $10 END,
  title_translations=CASE WHEN $18 THEN title_translations ELSE $16 END,subtitle_translations=CASE WHEN $18 THEN subtitle_translations ELSE $17 END WHERE id=$1`,
 		c.ID, tjaFile, audioFile, coverFile, description, flags, nijiiroID, officialID,
-		meta.Title, meta.Subtitle, meta.BPM, meta.Offset, demoStart, demoStart+15, duration, titles, subtitles, keepTitles); e != nil {
+		meta.Title, meta.Subtitle, meta.BPM, meta.Offset, demoStart, demoEnd, duration, titles, subtitles, keepTitles); e != nil {
 		internal(w, e)
 		return
 	}
@@ -287,6 +319,14 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	if e = s.releaseFiles(ctx, retired); e != nil {
 		log.Printf("replaced chart file cleanup pending: %v", e)
+	}
+	// The game's preview clip follows a new audio or range (a first upload has neither yet).
+	if af != nil || demoStart != c.DemoStart || demoEnd != c.DemoEnd {
+		source := ""
+		if af != nil {
+			source = af.path
+		}
+		s.previewAfter(ctx, c.ID, source)
 	}
 	updated, e := s.chart(ctx, c.ID)
 	if e != nil {

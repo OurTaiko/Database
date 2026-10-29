@@ -253,5 +253,20 @@ func (s *Server) resourceLinks(w http.ResponseWriter, r *http.Request) {
 		internal(w, e)
 		return
 	}
-	respond(w, 200, map[string]any{"chartId": c.ID, "urlsExpire": false, "resources": map[string]resourceLink{"tja": tjaLink, "audio": audioLink}})
+	resources := map[string]resourceLink{"tja": tjaLink, "audio": audioLink}
+	// The song-select preview clip, as Fanmade lists it; a chart waiting for the backfill has none.
+	var previewKey, previewHash string
+	var previewSize int64
+	e = s.DB.QueryRow(r.Context(), `SELECT r.storage_key,r.sha256,r.byte_size FROM charts c JOIN chart_resources r ON r.id=c.preview_file WHERE c.id=$1`, c.ID).Scan(&previewKey, &previewHash, &previewSize)
+	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
+		internal(w, e)
+		return
+	}
+	if e == nil {
+		if resources["preview"], e = link(previewKey, "preview", previewHash, "audio/ogg", previewSize); e != nil {
+			internal(w, e)
+			return
+		}
+	}
+	respond(w, 200, map[string]any{"chartId": c.ID, "urlsExpire": false, "resources": resources})
 }

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { endpoints } from '@/api/endpoints'
+import { AudioPlayer } from '@/components/audio-player'
 import { api, jsonRequest } from './api/client'
 import type { Chart, Locale } from './api/types'
 import { CategoryPicker } from './categories'
@@ -37,9 +38,9 @@ export function parseBpm(value: string): number | null | undefined {
 }
 
 // Edits what the database says about a chart. The stored TJA and audio are not
-// changed here. The title and subtitle are the database's at any time (R042);
-// the BPM and difficulties are the TJA's, so the BPM is editable only on a song
-// registered without files.
+// changed here. The title, subtitle and preview range are the database's at
+// any time (R042, R045); the BPM and difficulties are the TJA's, so the BPM is
+// editable only on a song registered without files.
 export function EditMetadata({
   chart,
   csrf,
@@ -61,6 +62,8 @@ export function EditMetadata({
   const [description, setDescription] = useState(chart.description)
   const [titles, setTitles] = useState(chart.titleTranslations)
   const [subtitles, setSubtitles] = useState(chart.subtitleTranslations)
+  const [demoStart, setDemoStart] = useState(String(chart.demoStart))
+  const [demoEnd, setDemoEnd] = useState(String(chart.demoEnd))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const submit = async (event: FormEvent) => {
@@ -74,6 +77,24 @@ export function EditMetadata({
     const parsedBpm = parseBpm(bpm)
     if (!title.trim() || (!chart.hasFiles && parsedBpm === undefined)) {
       setError(t('db.songFieldsInvalid'))
+      return
+    }
+    const start = Number(demoStart),
+      end = Number(demoEnd)
+    const demoChanged = start !== chart.demoStart || end !== chart.demoEnd
+    if (
+      chart.hasFiles &&
+      demoChanged &&
+      (!demoStart.trim() ||
+        !demoEnd.trim() ||
+        !Number.isFinite(start) ||
+        !Number.isFinite(end) ||
+        start < 0 ||
+        start >= chart.duration ||
+        end <= start ||
+        end > 1215)
+    ) {
+      setError(t('messages.previewRangeInvalid'))
       return
     }
     setBusy(true)
@@ -91,6 +112,8 @@ export function EditMetadata({
               subtitle: subtitle.trim(),
               // The BPM is the TJA's once a chart has files.
               ...(chart.hasFiles ? {} : { bpm: parsedBpm }),
+              // The preview range needs the audio; it is sent only when changed.
+              ...(chart.hasFiles && demoChanged ? { demoStart: start, demoEnd: end } : {}),
               nijiiroId: nijiiro,
               officialId: official || null,
               categoryIds,
@@ -180,6 +203,46 @@ export function EditMetadata({
           </div>
         </div>
         <p className="text-sm text-muted-foreground">{t('db.identifierHint')}</p>
+        {chart.hasFiles && (
+          <fieldset disabled={busy} className="space-y-3 rounded-[14px] border p-4">
+            <legend className="px-2 text-sm font-medium">{t('messages.previewRange')}</legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Label htmlFor="edit-demo-start" className="flex flex-col items-start gap-2">
+                {t('messages.previewStartSeconds')}
+                <Input
+                  id="edit-demo-start"
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  value={demoStart}
+                  onChange={(e) => setDemoStart(e.target.value)}
+                />
+              </Label>
+              <Label htmlFor="edit-demo-end" className="flex flex-col items-start gap-2">
+                {t('messages.previewEndSeconds')}
+                <Input
+                  id="edit-demo-end"
+                  type="number"
+                  min="0"
+                  max="1215"
+                  step="any"
+                  required
+                  value={demoEnd}
+                  onChange={(e) => setDemoEnd(e.target.value)}
+                />
+              </Label>
+            </div>
+            <AudioPlayer
+              label={t('messages.audioPreview')}
+              src={endpoints.resource(chart, 'audio')}
+              startAt={demoStart.trim() ? Number(demoStart) : NaN}
+              endAt={demoEnd.trim() ? Number(demoEnd) : NaN}
+              knownDuration={chart.duration}
+              disabled={busy || Number(demoEnd) > 1215}
+            />
+          </fieldset>
+        )}
         <CategoryPicker value={categoryIds} onChange={setCategoryIds} disabled={busy} />
         <fieldset className="space-y-3 [&>legend]:mb-2 [&>legend]:text-sm [&>legend]:font-medium">
           <legend>{t('db.translations')}</legend>
