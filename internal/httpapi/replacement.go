@@ -231,7 +231,7 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if recorded != payload || recordedChart == nil || *recordedChart != c.ID {
-			problem(w, 409, "IDEMPOTENCY_KEY_REUSED", "此上传请求标识已用于其他内容，请刷新页面后重试")
+			problem(w, 409, "IDEMPOTENCY_CONFLICT", "此上传请求标识已用于其他内容，请刷新页面后重试")
 			return
 		}
 		current, e := s.chart(ctx, c.ID)

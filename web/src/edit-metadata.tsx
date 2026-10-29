@@ -288,7 +288,7 @@ export function EditMetadata({
             {t('messages.cancel')}
           </DialogClose>
           <Button type="submit" disabled={busy}>
-            {busy ? t('messages.saving') : t('db.save')}
+            {busy ? t('messages.saving') : t('messages.saveChanges')}
           </Button>
         </div>
       </form>

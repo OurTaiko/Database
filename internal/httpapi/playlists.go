@@ -301,9 +301,9 @@ func (s *Server) playlistCharts(ctx context.Context, ids []int64) ([]Chart, erro
 	return charts, nil
 }
 
-// storedPlaylistCharts reads a playlist the requester may see and its chart
+// storedPlaylistSongs reads a playlist the requester may see and its chart
 // IDs in order. It reports false after writing the error response.
-func (s *Server) storedPlaylistCharts(w http.ResponseWriter, r *http.Request, raw string) (Playlist, []int64, bool) {
+func (s *Server) storedPlaylistSongs(w http.ResponseWriter, r *http.Request, raw string) (Playlist, []int64, bool) {
 	ctx := r.Context()
 	id, ok := playlistID(raw)
 	p, e := Playlist{}, pgx.ErrNoRows
@@ -351,7 +351,7 @@ func (s *Server) playlistDetail(w http.ResponseWriter, r *http.Request) {
 		p = system.playlist(len(ids))
 	} else {
 		var ok bool
-		if p, ids, ok = s.storedPlaylistCharts(w, r, r.PathValue("id")); !ok {
+		if p, ids, ok = s.storedPlaylistSongs(w, r, r.PathValue("id")); !ok {
 			return
 		}
 	}

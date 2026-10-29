@@ -41,7 +41,7 @@ export function Layout() {
     { to: '/dans', label: t('dans.nav'), icon: MedalIcon },
     { to: '/users', label: t('messages.userSquare'), icon: UsersIcon },
     ...(session.user?.canUpload
-      ? [{ to: '/me/charts', label: t('db.chartManager'), icon: FolderHeart }]
+      ? [{ to: '/me/charts', label: t('messages.chartManager'), icon: FolderHeart }]
       : []),
   ]
   return (

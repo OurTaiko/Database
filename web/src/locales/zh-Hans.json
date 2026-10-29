@@ -400,7 +400,9 @@
     "selectPlayerSide": "选择玩家侧",
     "manageChart": "管理",
     "chartSections": "谱面详情分区",
-    "chartTab": "谱面"
+    "chartTab": "谱面",
+    "chartManager": "谱面管理",
+    "singleSide": "单人"
   },
   "common": {
     "siteTitle": "OurTaiko Database · 官方谱面数据库",
@@ -464,7 +466,6 @@
     "browse": "浏览谱面",
     "upload": "上传谱面",
     "myUploads": "我的上传",
-    "chartManager": "谱面管理",
     "heroTitle": "太鼓达人官方谱面数据库",
     "results": "谱面",
     "noCharts": "数据库里还没有谱面",
@@ -491,7 +492,6 @@
     "none": "无",
     "hasDouble": "含 1P／2P 分侧谱面",
     "hasBranching": "含分歧谱面",
-    "single": "单人",
     "record": "数据库记录",
     "uploader": "上传者",
     "created": "收录时间",
@@ -518,7 +518,6 @@
     "filterFiles": "文件",
     "filesAny": "不限文件",
     "filesYes": "已有文件",
-    "filesNo": "暂无文件",
     "uploadMode": "上传方式",
     "uploadModeFiles": "上传 TJA 与音频",
     "uploadModeSong": "仅登记乐曲",
@@ -535,7 +534,6 @@
     "translations": "曲名与副标题译名",
     "translatedTitle": "曲名",
     "translatedSubtitle": "副标题",
-    "save": "保存",
     "uploadPermission": "上传权限",
     "permissionGranted": "已授予",
     "permissionNone": "未授予",

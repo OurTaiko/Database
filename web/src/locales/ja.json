@@ -400,7 +400,9 @@
     "selectPlayerSide": "プレイヤー側を選択",
     "manageChart": "管理",
     "chartSections": "譜面の詳細",
-    "chartTab": "譜面"
+    "chartTab": "譜面",
+    "chartManager": "譜面管理",
+    "singleSide": "シングル"
   },
   "common": {
     "siteTitle": "OurTaiko Database · 公式譜面",
@@ -464,7 +466,6 @@
     "browse": "譜面を探す",
     "upload": "譜面をアップロード",
     "myUploads": "アップロードした譜面",
-    "chartManager": "譜面管理",
     "heroTitle": "太鼓の達人 公式譜面データベース",
     "results": "譜面",
     "noCharts": "データベースにまだ譜面がありません",
@@ -491,7 +492,6 @@
     "none": "なし",
     "hasDouble": "1P／2P 別譜面あり",
     "hasBranching": "譜面分岐あり",
-    "single": "1人用",
     "record": "データベース記録",
     "uploader": "アップロード者",
     "created": "追加日時",
@@ -518,7 +518,6 @@
     "filterFiles": "ファイル",
     "filesAny": "ファイルの有無を問わない",
     "filesYes": "ファイルあり",
-    "filesNo": "ファイル未登録",
     "uploadMode": "アップロード方法",
     "uploadModeFiles": "TJA と音源をアップロード",
     "uploadModeSong": "曲だけ登録",
@@ -535,7 +534,6 @@
     "translations": "曲名とサブタイトルの訳",
     "translatedTitle": "曲名",
     "translatedSubtitle": "サブタイトル",
-    "save": "保存",
     "uploadPermission": "アップロード権限",
     "permissionGranted": "付与済み",
     "permissionNone": "未付与",

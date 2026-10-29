@@ -14,7 +14,7 @@ import {
   ArrowCounterClockwiseIcon as RotateCcw,
 } from '@phosphor-icons/react'
 import type { Chart } from './api/types'
-import { baseCourse, blockKey, groupCourses, groupLevel, groupName } from './courses'
+import { baseCourse, slotKey, groupCourses, groupLevel, groupName } from './courses'
 import { Notice } from './notifications'
 import { maxTja } from './tja'
 import { ChartLeaderboard } from './chart-leaderboard'
@@ -135,8 +135,8 @@ export function ChartActivity({
               // Keep the chosen side when the next course has it too.
               const side = course.slice(baseCourse(course).length)
               setCourse(
-                blockKey(
-                  next.sides.find((d) => blockKey(d) === `${next.base}${side}`) ?? next.sides[0],
+                slotKey(
+                  next.sides.find((d) => slotKey(d) === `${next.base}${side}`) ?? next.sides[0],
                 ),
               )
             }}
@@ -178,8 +178,10 @@ export function ChartActivity({
                 className={tabButtonGroupClassName}
               >
                 {group.sides.map((d) => (
-                  <TabsTrigger key={d.side} value={blockKey(d)} className={tabButtonClassName}>
-                    {d.side === 'single' ? t('db.single') : d.side.slice(1).toUpperCase() + 'P'}
+                  <TabsTrigger key={d.side} value={slotKey(d)} className={tabButtonClassName}>
+                    {d.side === 'single'
+                      ? t('messages.singleSide')
+                      : d.side.slice(1).toUpperCase() + 'P'}
                     {d.branching && (
                       <GitBranchIcon className="size-3" aria-label={t('db.hasBranching')} />
                     )}

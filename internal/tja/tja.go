@@ -163,7 +163,7 @@ func Available() bool {
 // the titles by locale (origin + en/ja/ko/zh/zh_tw) and the raw difficulty constants. A block
 // the game cannot play is refused.
 func Parse(data []byte, audioName string) (Metadata, *Issue) {
-	m, issue := scan(data, audioName)
+	m, issue := parse(data, audioName)
 	if issue != nil {
 		return m, issue
 	}
@@ -217,7 +217,7 @@ func issueLine(message string) int {
 }
 
 // scan is the header and structure gate: what the database can hold.
-func scan(data []byte, audioName string) (Metadata, *Issue) {
+func parse(data []byte, audioName string) (Metadata, *Issue) {
 	m := Metadata{Difficulties: []Difficulty{}, TitleTranslations: map[string]string{}, SubtitleTranslations: map[string]string{}}
 	if !utf8.Valid(data) {
 		return m, fail("TJA_ENCODING_INVALID", "TJA 不是有效 UTF-8", 0)

@@ -84,7 +84,7 @@ type entry struct {
 
 func hashBytes(data []byte) string { h := sha256.Sum256(data); return hex.EncodeToString(h[:]) }
 
-func hashFile(name string) (string, int64, error) {
+func fileDigest(name string) (string, int64, error) {
 	f, err := os.Open(name)
 	if err != nil {
 		return "", 0, err
@@ -199,7 +199,7 @@ func prepare(root string, e *entry) error {
 		e.issue = fmt.Sprintf("AUDIO_DURATION_INVALID: %.1f s", e.duration)
 		return nil
 	}
-	if e.audioHash, e.audioSize, err = hashFile(e.audioPath); err != nil {
+	if e.audioHash, e.audioSize, err = fileDigest(e.audioPath); err != nil {
 		return err
 	}
 	if e.audioSize > tja.MaxAudio {

@@ -28,7 +28,7 @@ import { api, jsonRequest } from './api/client'
 import { AddToPlaylistDialog } from './playlist-dialogs'
 import type { Chart, ChartList, Vote, VoteResult } from './api/types'
 import { ChartCard, formatDuration } from '@/components/chart-card'
-import { blockKey, supportsChart } from './courses'
+import { slotKey, supportsChart } from './courses'
 import { defaultDifficulty, hasConstants } from './chart-difficulty'
 import { DifficultyConstants } from './difficulty-constants'
 import { useSession } from './session-context'
@@ -350,10 +350,10 @@ export function Detail() {
       <p className="text-sm text-muted-foreground">{t('messages.loadingChart')}</p>
     )
   if (!supportsChart(chart)) return <Notice>{t('messages.thisChartTypeIsNotSupported')}</Notice>
-  const course = chart.difficulties.some((d) => blockKey(d) === chosenCourse)
+  const course = chart.difficulties.some((d) => slotKey(d) === chosenCourse)
     ? chosenCourse
     : defaultDifficulty(chart.difficulties)
-  const chosenDifficulty = chart.difficulties.find((d) => blockKey(d) === course)
+  const chosenDifficulty = chart.difficulties.find((d) => slotKey(d) === course)
   const showConstants = hasConstants(chart.difficulties)
   const pageTab: PageTab =
     section === 'activity' ? (activityTab === 'leaderboard' ? 'leaderboard' : 'chart') : section
@@ -841,14 +841,14 @@ export function ChartManagerPage() {
   const tab = pathname.replace(/\/$/, '').endsWith('/publish') ? 'publish' : 'charts'
   return (
     <>
-      <h1 className="font-extrabold text-2xl sm:text-3xl">{t('db.chartManager')}</h1>
+      <h1 className="font-extrabold text-2xl sm:text-3xl">{t('messages.chartManager')}</h1>
       <Tabs
         value={tab}
         onValueChange={(value) =>
           navigate(value === 'publish' ? '/me/charts/publish' : '/me/charts')
         }
       >
-        <TabsList aria-label={t('db.chartManager')}>
+        <TabsList aria-label={t('messages.chartManager')}>
           <TabsTrigger value="charts">{t('db.myUploads')}</TabsTrigger>
           <TabsTrigger value="publish">
             <UploadSimpleIcon aria-hidden="true" />

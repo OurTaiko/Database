@@ -87,7 +87,7 @@ func (s *Server) createSong(w http.ResponseWriter, r *http.Request, u session, k
 			return
 		}
 		if recorded != payload || existing == nil {
-			problem(w, 409, "IDEMPOTENCY_KEY_REUSED", "此上传请求标识已用于其他内容，请刷新页面后重试")
+			problem(w, 409, "IDEMPOTENCY_CONFLICT", "此上传请求标识已用于其他内容，请刷新页面后重试")
 			return
 		}
 		c, e := s.chart(ctx, *existing)

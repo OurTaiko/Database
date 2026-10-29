@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { baseCourse, blockKey, courseNames } from './courses'
+import { baseCourse, slotKey, courseNames } from './courses'
 import { Notice } from './notifications'
 import { useSession } from './session-context'
 
@@ -31,7 +31,7 @@ export function ChartLeaderboard({ chart, course }: { chart: Chart; course: stri
   const [attempt, setAttempt] = useState(0)
   const { user } = useSession()
   const { id } = chart
-  const difficultyId = chart.difficulties.find((d) => blockKey(d) === course)?.id
+  const difficultyId = chart.difficulties.find((d) => slotKey(d) === course)?.id
   const locale = formatLocale(i18n.resolvedLanguage)
   useEffect(() => {
     const controller = new AbortController()

@@ -10,7 +10,7 @@ const mixed = "\xEF\xBB\xBFTITLE:Song\r\nTITLEJA:曲\r\nTITLEKO:\r\nSUBTITLE:--A
 	"STYLE:Double\r\n#START P1\r\n1,\r\n#END\r\n#START P2\r\n2,\r\n#END\r\n" +
 	"COURSE:2\r\nLEVEL:5\r\n#START\r\n1,\r\n#END\r\n"
 
-func parse(t *testing.T, source, audio string) (Metadata, *Issue) {
+func parseSource(t *testing.T, source, audio string) (Metadata, *Issue) {
 	t.Helper()
 	data, issue := NormalizeUTF8([]byte(source), DetectEncoding([]byte(source)))
 	if issue != nil {
@@ -20,7 +20,7 @@ func parse(t *testing.T, source, audio string) (Metadata, *Issue) {
 }
 
 func TestParseAcceptsSingleAndDoubleBlocksTogether(t *testing.T) {
-	m, issue := parse(t, mixed, "Song.ogg")
+	m, issue := parseSource(t, mixed, "Song.ogg")
 	if issue != nil {
 		t.Fatal(issue)
 	}
@@ -61,7 +61,7 @@ func TestParseRejectsWhatTheDatabaseCannotHold(t *testing.T) {
 		"double, no side":  {strings.Replace(single, "#START", "STYLE:Double\n#START", 1), "", "TJA_PLAYER_REQUIRED"},
 		"invalid encoding": {"TITLE:\xff\xfe\x00", "", "TJA_ENCODING_INVALID"},
 	} {
-		if _, issue := parse(t, test.source, test.audio); issue == nil || issue.Code != test.code {
+		if _, issue := parseSource(t, test.source, test.audio); issue == nil || issue.Code != test.code {
 			t.Errorf("%s: issue = %v, want %s", name, issue, test.code)
 		}
 	}

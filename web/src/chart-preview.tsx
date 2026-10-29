@@ -22,7 +22,7 @@ import type { Chart } from './api/types'
 import { Notice } from './notifications'
 import { useNotification } from './notification-context'
 import { parsePreviewTja } from './preview-tja'
-import { blockKey } from './courses'
+import { slotKey } from './courses'
 
 const getBranchLabels = () => ({
   normal: t('messages.normalBranch'),
@@ -81,7 +81,7 @@ export default function ChartPreview({
             subtitle,
             course,
             level:
-              chart.difficulties.find((d) => blockKey(d) === course)?.level ?? selectedChart.level,
+              chart.difficulties.find((d) => slotKey(d) === course)?.level ?? selectedChart.level,
           }
         : null,
     [selectedChart, title, subtitle, chart.difficulties, course],

@@ -611,7 +611,7 @@ function slotBlocks(chart: Chart): SongBlock[] {
     }),
   )
 }
-const blockKey = (b: { course: string; side: string }) => `${b.course}/${b.side}`
+const slotKey = (b: { course: string; side: string }) => `${b.course}/${b.side}`
 
 function toExamRows(exams: DanExam[], songs: number): ExamRow[] {
   return exams.map((exam) => {
@@ -836,13 +836,13 @@ export function DanEditorPage() {
               <span className="min-w-0 flex-1 truncate font-medium">{song.title}</span>
               <ChoiceSelect
                 label={t('dans.side')}
-                value={song.side ? blockKey(song) : ''}
+                value={song.side ? slotKey(song) : ''}
                 onValueChange={(v) => {
                   const [course, side] = v.split('/')
                   setSongs(songs.map((s, j) => (j === i ? { ...s, course, side } : s)))
                 }}
                 items={song.blocks.map((b) => ({
-                  value: blockKey(b),
+                  value: slotKey(b),
                   label: `${t(`dans.courses.${b.course as (typeof courses)[number]}`)} ★${b.level} · ${t(`dans.sides.${b.side as (typeof sides)[number]}`)}`,
                 }))}
               />

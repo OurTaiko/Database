@@ -25,10 +25,10 @@ export const sides: Side[] = ['single', 'p1', 'p2']
 
 /**
  * Names a block inside a TJA the way the preview parser keys them: the course,
- * with `_1p` or `_2p` for a `#START P1` / `#START P2` block.
+ * with `_1p` or `_2p` for a `#START P1` / `#START P2` block. Same as Fanmade's.
  */
-export function blockKey(d: Pick<Difficulty, 'course' | 'side'>): string {
-  return d.side === 'single' ? d.course : `${d.course}_${d.side.slice(1)}p`
+export function slotKey(d: { course: string; side?: string }): string {
+  return d.course + (d.side === 'p1' ? '_1p' : d.side === 'p2' ? '_2p' : '')
 }
 export function baseCourse(key: string): BaseCourse {
   return key.replace(/_[12]p$/, '') as BaseCourse

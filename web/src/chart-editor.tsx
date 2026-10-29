@@ -16,7 +16,7 @@ import {
 } from '@phosphor-icons/react'
 import { api, previewReplacement, uploadChart } from './api/client'
 import type { Chart } from './api/types'
-import { blockKey, baseCourse, courseNames, isSupportedCourse } from './courses'
+import { slotKey, baseCourse, courseNames, isSupportedCourse } from './courses'
 import { useSession } from './session-context'
 import { Notice } from './notifications'
 import { useNotification } from './notification-context'
@@ -157,7 +157,7 @@ export function ChartEditorPage() {
         ...chart,
         difficulties: blocks.keys.map(
           (key) =>
-            chart.difficulties.find((d) => blockKey(d) === key) ?? {
+            chart.difficulties.find((d) => slotKey(d) === key) ?? {
               course: baseCourse(key),
               side: (key.endsWith('_1p') ? 'p1' : key.endsWith('_2p') ? 'p2' : 'single') as Side,
               level: 0,

@@ -2,7 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -27,12 +30,12 @@ func (s *Server) refreshPreview(parent context.Context, id int64, source string,
 		return err
 	}
 	defer tx.Rollback(ctx)
-	var audioKey string
+	var audioKey, audioSHA string
 	var audioSize int64
 	var start, end, duration float64
 	var previous *int64
-	err = tx.QueryRow(ctx, `SELECT r.storage_key,r.byte_size,c.demo_start,c.demo_end,c.duration,c.preview_file FROM charts c JOIN chart_resources r ON r.id=c.audio_file
- WHERE c.id=$1 AND `+publishedChart+` FOR UPDATE OF c`, id).Scan(&audioKey, &audioSize, &start, &end, &duration, &previous)
+	err = tx.QueryRow(ctx, `SELECT r.storage_key,r.sha256,r.byte_size,c.demo_start,c.demo_end,c.duration,c.preview_file FROM charts c JOIN chart_resources r ON r.id=c.audio_file
+ WHERE c.id=$1 AND `+publishedChart+` FOR UPDATE OF c`, id).Scan(&audioKey, &audioSHA, &audioSize, &start, &end, &duration, &previous)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -46,7 +49,7 @@ func (s *Server) refreshPreview(parent context.Context, id int64, source string,
 	defer os.RemoveAll(dir)
 	if source == "" {
 		source = filepath.Join(dir, "audio")
-		if err = s.copyObject(ctx, audioKey, audioSize, source); err != nil {
+		if err = s.fetch(ctx, audioKey, audioSHA, audioSize, source); err != nil {
 			return err
 		}
 	}
@@ -80,8 +83,8 @@ func (s *Server) refreshPreview(parent context.Context, id int64, source string,
 	return nil
 }
 
-// copyObject writes a stored object of the given size to path.
-func (s *Server) copyObject(ctx context.Context, key string, size int64, path string) error {
+// fetch copies a stored file into path and verifies it against its record (as Fanmade's).
+func (s *Server) fetch(ctx context.Context, key, sha string, size int64, path string) error {
 	in, err := s.Config.Objects.Open(ctx, key)
 	if err != nil {
 		return err
@@ -91,12 +94,13 @@ func (s *Server) copyObject(ctx context.Context, key string, size int64, path st
 	if err != nil {
 		return err
 	}
-	n, err := io.Copy(out, io.LimitReader(in, size+1))
+	h := sha256.New()
+	n, err := io.Copy(io.MultiWriter(out, h), io.LimitReader(in, size+1))
 	if err = errors.Join(err, out.Close()); err != nil {
 		return err
 	}
-	if n != size {
-		return errors.New("stored audio size mismatch")
+	if n != size || hex.EncodeToString(h.Sum(nil)) != sha {
+		return fmt.Errorf("stored file integrity mismatch: %s", key)
 	}
 	return nil
 }

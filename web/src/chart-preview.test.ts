@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { i18n } from './i18n'
-import { blockKey, courseNames, groupCourses, supportsChart } from './courses'
+import { slotKey, courseNames, groupCourses, supportsChart } from './courses'
 import { defaultDifficulty } from './chart-difficulty'
 import { parsePreviewTja } from './preview-tja'
 import type { Difficulty } from './tja'
@@ -36,7 +36,7 @@ describe('detail difficulty selection', () => {
     const p1: Difficulty = { course: 'Oni', side: 'p1', level: 9, maker: '' }
     const p2: Difficulty = { course: 'Oni', side: 'p2', level: 10, maker: '' }
     const single: Difficulty = { course: 'Oni', side: 'single', level: 8, maker: '' }
-    expect([single, p1, p2].map(blockKey)).toEqual(['Oni', 'Oni_1p', 'Oni_2p'])
+    expect([single, p1, p2].map(slotKey)).toEqual(['Oni', 'Oni_1p', 'Oni_2p'])
     expect(defaultDifficulty([p2, p1])).toBe('Oni_1p')
     expect(defaultDifficulty([p2, p1, single])).toBe('Oni')
     const [group] = groupCourses([p2, single, p1])

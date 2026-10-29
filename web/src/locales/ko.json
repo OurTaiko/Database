@@ -400,7 +400,9 @@
     "selectPlayerSide": "플레이어 쪽 선택",
     "manageChart": "관리",
     "chartSections": "채보 정보 구역",
-    "chartTab": "채보"
+    "chartTab": "채보",
+    "chartManager": "채보 관리",
+    "singleSide": "싱글"
   },
   "common": {
     "siteTitle": "OurTaiko Database · 공식 채보",
@@ -464,7 +466,6 @@
     "browse": "채보 둘러보기",
     "upload": "채보 업로드",
     "myUploads": "내 업로드",
-    "chartManager": "채보 관리",
     "heroTitle": "태고의 달인 공식 채보 데이터베이스",
     "results": "채보",
     "noCharts": "데이터베이스에 아직 채보가 없습니다",
@@ -491,7 +492,6 @@
     "none": "없음",
     "hasDouble": "1P/2P 별도 채보 포함",
     "hasBranching": "분기 채보 포함",
-    "single": "1인",
     "record": "데이터베이스 기록",
     "uploader": "업로더",
     "created": "추가 일시",
@@ -518,7 +518,6 @@
     "filterFiles": "파일",
     "filesAny": "파일 유무 무관",
     "filesYes": "파일 있음",
-    "filesNo": "파일 없음",
     "uploadMode": "업로드 방식",
     "uploadModeFiles": "TJA와 음원 업로드",
     "uploadModeSong": "곡만 등록",
@@ -535,7 +534,6 @@
     "translations": "곡명과 부제 번역",
     "translatedTitle": "곡명",
     "translatedSubtitle": "부제",
-    "save": "저장",
     "uploadPermission": "업로드 권한",
     "permissionGranted": "부여됨",
     "permissionNone": "없음",

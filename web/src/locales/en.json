@@ -400,7 +400,9 @@
     "selectPlayerSide": "Select player side",
     "manageChart": "Manage",
     "chartSections": "Chart sections",
-    "chartTab": "Chart"
+    "chartTab": "Chart",
+    "chartManager": "Manage charts",
+    "singleSide": "Single"
   },
   "common": {
     "siteTitle": "OurTaiko Database · Official charts",
@@ -467,7 +469,6 @@
     "browse": "Browse charts",
     "upload": "Upload chart",
     "myUploads": "My uploads",
-    "chartManager": "Manage charts",
     "heroTitle": "Official Taiko no Tatsujin chart database",
     "results": "Charts",
     "noCharts": "The database has no charts yet",
@@ -494,7 +495,6 @@
     "none": "None",
     "hasDouble": "Has separate 1P/2P charts",
     "hasBranching": "Includes branching charts",
-    "single": "Single",
     "record": "Database record",
     "uploader": "Uploader",
     "created": "Added",
@@ -521,7 +521,6 @@
     "filterFiles": "Files",
     "filesAny": "With or without files",
     "filesYes": "Has files",
-    "filesNo": "No files yet",
     "uploadMode": "Upload mode",
     "uploadModeFiles": "Upload TJA and audio",
     "uploadModeSong": "Register song only",
@@ -538,7 +537,6 @@
     "translations": "Translated titles and subtitles",
     "translatedTitle": "Title",
     "translatedSubtitle": "Subtitle",
-    "save": "Save",
     "uploadPermission": "Upload permission",
     "permissionGranted": "Granted",
     "permissionNone": "Not granted",
