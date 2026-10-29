@@ -19,8 +19,9 @@ import (
 //go:embed *.sql
 var migrations embed.FS
 
-// SystemUploaderID owns charts imported from the ESE repository. It has the
-// shape of an SSO subject, which never issues the all-zero ID.
+// SystemUploaderID owns the charts once imported from the ESE repository (the
+// importer is gone; new charts are uploaded on the site). It has the shape of
+// an SSO subject, which never issues the all-zero ID.
 const SystemUploaderID = "00000000000000000000000000000000"
 
 // Tables live in the public, internal and auth schemas of the design; the

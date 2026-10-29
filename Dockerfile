@@ -31,14 +31,13 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY site.go ./
 COPY --from=web /src/web/dist ./web/dist
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/ourtaiko-database-api ./cmd/server \
-    && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/import-ese ./cmd/import-ese
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/ourtaiko-database-api ./cmd/server
 
 FROM alpine:3.23
 RUN apk add --no-cache ca-certificates ffmpeg libwebp-tools curl libstdc++ libgcc \
     && addgroup -g 10001 app && adduser -D -u 10001 -G app app \
     && mkdir -p /data/files && chown -R app:app /data
-COPY --from=build /out/ourtaiko-database-api /out/import-ese /usr/local/bin/
+COPY --from=build /out/ourtaiko-database-api /usr/local/bin/
 COPY --from=tjaparser /out/tjaparser /usr/local/bin/tjaparser
 USER 10001:10001
 ENV LISTEN_ADDR=0.0.0.0:8081 STORAGE_DIR=/data/files
