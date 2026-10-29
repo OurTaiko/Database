@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,7 +25,7 @@ import (
 	"ourtaiko.dev/database/api/internal/constants"
 )
 
-const Version = "tja-official-v2"
+const Version = "tja-official-v3"
 const MaxTJA = 2 * 1024 * 1024
 const MaxAudio = 100 * 1024 * 1024
 
@@ -75,7 +76,10 @@ type Metadata struct {
 	Offset               float64           `json:"offset"`
 	DemoStart            float64           `json:"demoStart"`
 	Wave                 string            `json:"wave"`
-	Difficulties         []Difficulty      `json:"difficulties"`
+	// Movie is the BGMOVIE file name as declared; empty when the chart has none.
+	Movie        string       `json:"-"`
+	MovieOffset  float64      `json:"movieOffset"`
+	Difficulties []Difficulty `json:"difficulties"`
 }
 
 func SafeFilename(s string) bool {
@@ -280,7 +284,8 @@ func parse(data []byte, audioName string) (Metadata, *Issue) {
 			}
 			continue
 		}
-		key = strings.ToUpper(strings.TrimSpace(key))
+		written := strings.TrimSpace(key)
+		key = strings.ToUpper(written)
 		value = strings.TrimSpace(value)
 		if len(value) > 500 && key != "BALLOON" && !strings.HasPrefix(key, "BALLOON") {
 			return m, fail("TJA_STRUCTURE_INVALID", "元数据字段过长", line)
@@ -317,6 +322,26 @@ func parse(data []byte, audioName string) (Metadata, *Issue) {
 			seen[key] = true
 			waveLine = line
 			m.Wave = value
+		case "BGMOVIE", "MOVIEOFFSET":
+			// Stored files have these headers rewritten or read back, so they must be as
+			// unambiguous as WAVE (as Fanmade checks them).
+			if written != key || started || seen[key] {
+				return m, fail("TJA_MOVIE_INVALID", "请使用大写 "+key+":，位于第一个 #START 之前且只声明一次", line)
+			}
+			seen[key] = true
+			if key == "BGMOVIE" {
+				extension := strings.ToLower(filepath.Ext(value))
+				if value != "" && (!SafeFilename(value) || (extension != ".mp4" && extension != ".webm" && extension != ".mov")) {
+					return m, fail("TJA_MOVIE_PATH_INVALID", "BGMOVIE 必须为不带路径、引号的 .mp4、.webm 或 .mov 文件名", line)
+				}
+				m.Movie = value
+			} else if value != "" {
+				n, valid := numeric(value)
+				if !valid || math.Abs(n) > 1200 {
+					return m, fail("TJA_MOVIE_OFFSET_INVALID", "MOVIEOFFSET 必须为秒数，绝对值不超过 1200", line)
+				}
+				m.MovieOffset = n
+			}
 		case "COURSE":
 			normalized := strings.ToLower(value)
 			if normalized == "tower" || normalized == "dan" || normalized == "5" || normalized == "6" {
@@ -433,15 +458,26 @@ func WaveName(data []byte) string {
 	return value
 }
 
+// MovieName returns the background movie file name declared by a stored TJA.
+func MovieName(data []byte) string {
+	_, _, value, _ := header(data, "BGMOVIE")
+	return value
+}
+
 // SetWave points the WAVE header at name, leaving every other byte unchanged.
 // Stored charts reference their audio by its content-addressed file name (R007).
-func SetWave(data []byte, name string) ([]byte, bool) {
-	start, end, _, ok := header(data, "WAVE")
+func SetWave(data []byte, name string) ([]byte, bool) { return setHeader(data, "WAVE", name) }
+
+// SetMovie points the BGMOVIE header at the stored movie in the same way.
+func SetMovie(data []byte, name string) ([]byte, bool) { return setHeader(data, "BGMOVIE", name) }
+
+func setHeader(data []byte, key, value string) ([]byte, bool) {
+	start, end, _, ok := header(data, key)
 	if !ok {
 		return nil, false
 	}
-	out := make([]byte, 0, len(data)+len(name))
+	out := make([]byte, 0, len(data)+len(value))
 	out = append(out, data[:start]...)
-	out = append(out, "WAVE:"+name...)
+	out = append(out, key+":"+value...)
 	return append(out, data[end:]...), true
 }

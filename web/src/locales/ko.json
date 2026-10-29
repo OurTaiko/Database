@@ -856,7 +856,13 @@
       "comment_upvotes": "“{{chart}}”에 단 내 댓글이 추천 {{count}}개를 받았습니다",
       "comment_removed": "“{{chart}}”에 단 내 댓글을 관리자가 숨겼습니다",
       "unknown": "새 알림이 있습니다",
-      "playlist_removed": "회원님의 플레이리스트 \"{{name}}\"이(가) 관리자에 의해 삭제되었습니다"
+      "playlist_removed": "회원님의 플레이리스트 \"{{name}}\"이(가) 관리자에 의해 삭제되었습니다",
+      "upload_published": "\"{{title}}\"이(가) 게시되었습니다",
+      "upload_updated": "\"{{title}}\"이(가) 업데이트되었습니다",
+      "upload_published_partial": "\"{{title}}\"이(가) 게시되었지만 처리하지 못한 파일은 제외되었습니다: {{files}}",
+      "upload_updated_partial": "\"{{title}}\"이(가) 업데이트되었지만 처리하지 못한 파일은 제외되었습니다: {{files}}",
+      "upload_failed": "\"{{title}}\" 업로드에 실패했으며 아무것도 저장되지 않았습니다: {{reason}}",
+      "upload_skipped_file": "{{file}}({{reason}})"
     },
     "settings": {
       "comment_reply": "내 댓글에 달린 답글",
@@ -866,6 +872,10 @@
       "dan_upvotes": "단위 추천 마일스톤",
       "comment_upvotes": "내 댓글 추천 달성",
       "comment_removed": "관리자가 내 댓글을 숨김"
+    },
+    "file": {
+      "cover": "커버",
+      "movie": "배경 동영상"
     }
   },
   "collaboration": {

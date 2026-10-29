@@ -58,7 +58,8 @@ export function uploadChart(
   signal: AbortSignal,
   onProgress: (n: number) => void,
   replaceChartId?: number,
-): Promise<Chart> {
+  waitForResult = false,
+): Promise<Chart | { status: 'processing' }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open(
@@ -68,6 +69,10 @@ export function uploadChart(
     xhr.withCredentials = true
     xhr.setRequestHeader('X-CSRF-Token', csrf)
     xhr.setRequestHeader('Idempotency-Key', key)
+    // The server decodes and stores the files after replying; the outcome
+    // arrives as a notification, so the uploader need not stay on the page.
+    // A caller that shows the result itself waits for it instead.
+    if (!waitForResult) xhr.setRequestHeader('Prefer', 'respond-async')
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
     }

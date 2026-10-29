@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"math"
@@ -22,10 +23,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/text/unicode/norm"
 	"ourtaiko.dev/database/api/internal/audio"
 	"ourtaiko.dev/database/api/internal/cover"
-	"ourtaiko.dev/database/api/internal/database"
 	"ourtaiko.dev/database/api/internal/tja"
+	"ourtaiko.dev/database/api/internal/video"
 )
 
 type stagedFile struct {
@@ -112,7 +114,7 @@ func receiveUploadForm(w http.ResponseWriter, r *http.Request, dir string, allow
 		}
 		field, name := params["name"], params["filename"]
 		switch {
-		case field == "tja" || field == "audio" || field == "cover":
+		case field == "tja" || field == "audio" || field == "cover" || field == "movie":
 			validExtension := strings.EqualFold(filepath.Ext(name), ".tja")
 			maxBytes := int64(tja.MaxTJA)
 			if field == "audio" {
@@ -123,8 +125,12 @@ func receiveUploadForm(w http.ResponseWriter, r *http.Request, dir string, allow
 				validExtension = cover.ValidExtension(name)
 				maxBytes = cover.MaxBytes
 			}
+			if field == "movie" {
+				validExtension = video.ValidExtension(name)
+				maxBytes = video.MaxBytes
+			}
 			if files[field] != nil || !tja.SafeFilename(name) || !validExtension {
-				problem(w, 400, "UPLOAD_FILES_INVALID", "文件类型、数量或文件名无效；封面仅支持 JPG / PNG / WebP，文件名不能包含路径")
+				problem(w, 400, "UPLOAD_FILES_INVALID", "文件类型、数量或文件名无效；封面仅支持 JPG / PNG / WebP，视频仅支持 MP4 / WebM / MOV，文件名不能包含路径")
 				return nil, nil, false
 			}
 			f := &stagedFile{name: name, path: filepath.Join(dir, field)}
@@ -174,9 +180,10 @@ func receiveUploadForm(w http.ResponseWriter, r *http.Request, dir string, allow
 	return files, fields, true
 }
 
-// upload publishes a new chart from a TJA, its audio and an optional cover.
-// Everything is validated before any object is written. A form with neither
-// a TJA nor an audio registers a song without files (createSong).
+// upload publishes a new chart from a TJA, its audio, and an optional cover and background
+// movie, as Fanmade does: the request makes the quick checks and keeps the files; decoding,
+// transcoding and storing follow in the background (upload_job.go). A form with neither a
+// TJA nor an audio registers a song without files (createSong).
 func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	u, ok := s.uploader(w, r)
 	if !ok {
@@ -199,7 +206,13 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		internal(w, e)
 		return
 	}
-	defer os.RemoveAll(dir)
+	// The staged files belong to the request until a job accepts them.
+	accepted := false
+	defer func() {
+		if !accepted {
+			os.RemoveAll(dir)
+		}
+	}()
 	files, fields, ok := receiveUploadForm(w, r, dir, uploadFields)
 	if !ok {
 		return
@@ -220,8 +233,8 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		problem(w, 422, "DESCRIPTION_INVALID", "说明包含无效字符")
 		return
 	}
-	tf, af, cf := files["tja"], files["audio"], files["cover"]
-	if tf == nil && af == nil {
+	tf, af, cf, mv := files["tja"], files["audio"], files["cover"], files["movie"]
+	if tf == nil && af == nil && mv == nil {
 		s.createSong(w, r, u, key, fields, cf, categoryIDs, flags, nijiiroID, officialID)
 		return
 	}
@@ -229,149 +242,93 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "UPLOAD_FILES_INVALID", "必须同时选择 TJA 和一个 OGG 或 MP3 音频，或两者都不选以仅登记乐曲")
 		return
 	}
+	data, meta, ok := readUploadTJA(w, tf, fields["encoding"], af.name)
+	if !ok {
+		return
+	}
+	keepMovie, ok := checkMovie(w, meta, mv, nil)
+	if !ok {
+		return
+	}
+	if !reservePending(w, s) {
+		return
+	}
+	parts := []string{tf.name, tf.sha, af.name, af.sha, description, strings.Join(categoryIDs, ","), fields["nijiiroId"], fields["officialId"], fields["demoStart"], fields["demoEnd"]}
+	for _, f := range []*stagedFile{cf, mv} {
+		if f != nil {
+			parts = append(parts, f.name, f.sha)
+		}
+	}
+	job := &uploadJob{
+		user: u.User.ID, key: key, dir: dir, tja: tf, audio: af, cover: cf, movie: mv, normalized: data, meta: meta,
+		description: description, flags: flags, nijiiroID: nijiiroID, officialID: officialID, fields: fields, keepMovie: keepMovie,
+		// RFC 7240: the client asks not to wait for processing.
+		async: strings.Contains(strings.ToLower(r.Header.Get("Prefer")), "respond-async"), done: make(chan uploadResult, 1),
+	}
+	accepted = s.acceptUpload(w, r, job, hash(strings.Join(parts, "\n")), nil)
+}
+
+// readUploadTJA normalizes and validates an uploaded TJA against the audio it names
+// (waveCheck, or none when the stored audio stays). It reports false after answering.
+func readUploadTJA(w http.ResponseWriter, tf *stagedFile, encoding, waveCheck string) ([]byte, tja.Metadata, bool) {
 	invalid := func(issue *tja.Issue) {
 		respond(w, 422, map[string]any{"code": issue.Code, "message": issue.Message, "errors": []*tja.Issue{issue}, "requestId": w.Header().Get("X-Request-ID"), "validationVersion": tja.Version})
 	}
 	raw, e := os.ReadFile(tf.path)
 	if e != nil {
 		internal(w, e)
-		return
+		return nil, tja.Metadata{}, false
 	}
-	encoding := fields["encoding"]
 	if encoding == "" {
 		encoding = tja.DetectEncoding(raw)
 	}
 	data, issue := tja.NormalizeUTF8(raw, encoding)
 	if issue != nil {
 		invalid(issue)
-		return
+		return nil, tja.Metadata{}, false
 	}
-	meta, issue := tja.Parse(data, af.name)
+	meta, issue := tja.Parse(data, waveCheck)
 	if issue != nil {
 		invalid(issue)
-		return
+		return nil, tja.Metadata{}, false
 	}
-	duration, e := audio.Validate(r.Context(), af.path, af.name)
-	if e != nil {
-		log.Printf("request=%s audio rejected: %v", w.Header().Get("X-Request-ID"), e)
-		problem(w, 422, "AUDIO_INVALID", "音频无法解码，或不是单音轨的 OGG Vorbis / MP3，或时长超过 20 分钟")
-		return
-	}
-	var coverData []byte
-	if cf != nil {
-		source, e := os.ReadFile(cf.path)
-		if e != nil {
-			internal(w, e)
-			return
-		}
-		if coverData, ok = encodeCover(w, r, cf.name, source); !ok {
-			return
-		}
-	}
-	// R007: the stored TJA names its audio by content hash; hash the TJA after
-	// that rewrite, never before.
-	extension := fileExtension(af.name)
-	meta.Wave = af.sha + "." + extension
-	data, rewritten := tja.SetWave(data, meta.Wave)
-	if !rewritten {
-		invalid(&tja.Issue{Code: "TJA_WAVE_MISSING", Message: "TJA 缺少 WAVE 音频引用"})
-		return
-	}
-	tf.path = filepath.Join(dir, "tja.normalized")
-	if e = os.WriteFile(tf.path, data, 0600); e != nil {
-		internal(w, e)
-		return
-	}
-	tf.sha, tf.size = hash(string(data)), int64(len(data))
-	demoStart, demoEnd, ok := previewRange(w, fields, meta.DemoStart, duration)
-	if !ok {
-		return
-	}
-	coverSHA := ""
-	if coverData != nil {
-		coverSHA = hash(string(coverData))
-	}
-	payload := hash(strings.Join([]string{tf.sha, af.sha, coverSHA, description, strings.Join(categoryIDs, ","), fields["nijiiroId"], fields["officialId"], fields["demoStart"], fields["demoEnd"]}, "\n"))
+	return data, meta, true
+}
 
-	ctx := context.WithoutCancel(r.Context())
-	tx, e := s.DB.Begin(ctx)
-	if e != nil {
-		internal(w, e)
-		return
+// checkMovie matches the BGMOVIE a TJA declares with the movie sent, as Fanmade does; a
+// replacement may keep the chart's stored movie (keep reports that). It reports false after
+// answering.
+func checkMovie(w http.ResponseWriter, meta tja.Metadata, mv *stagedFile, existing *Chart) (keep, ok bool) {
+	invalid := func(code, message, expected, actual string) {
+		issue := &tja.Issue{Code: code, Message: message, Expected: expected, Actual: actual}
+		respond(w, 422, map[string]any{"code": issue.Code, "message": issue.Message, "errors": []*tja.Issue{issue}, "requestId": w.Header().Get("X-Request-ID"), "validationVersion": tja.Version})
 	}
-	defer tx.Rollback(ctx)
-	// A retried request returns the chart it already created.
-	tag, e := tx.Exec(ctx, `INSERT INTO upload_requests(user_id,idempotency_key,payload_digest,tja_sha256,audio_sha256) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, u.User.ID, key, payload, tf.sha, af.sha)
-	if e != nil {
-		internal(w, e)
-		return
-	}
-	if tag.RowsAffected() == 0 {
-		var recorded string
-		var existing *int64
-		if e = tx.QueryRow(ctx, `SELECT payload_digest,chart_id FROM upload_requests WHERE user_id=$1 AND idempotency_key=$2`, u.User.ID, key).Scan(&recorded, &existing); e != nil {
-			internal(w, e)
-			return
+	switch {
+	case meta.Movie == "" && mv != nil:
+		problem(w, 400, "UPLOAD_FILES_INVALID", "TJA 没有声明 BGMOVIE，不能上传视频")
+		return false, false
+	case meta.Movie != "" && mv == nil:
+		if existing == nil || existing.MovieHash == "" {
+			invalid("TJA_MOVIE_MISSING", fmt.Sprintf("TJA 的 BGMOVIE 引用了「%s」，请同时选择该视频文件，或删除 BGMOVIE 后重新上传。", meta.Movie), meta.Movie, "")
+			return false, false
 		}
-		if recorded != payload || existing == nil {
-			problem(w, 409, "IDEMPOTENCY_CONFLICT", "此上传请求标识已用于其他内容，请刷新页面后重试")
-			return
-		}
-		c, e := s.chart(ctx, *existing)
-		if e != nil {
-			internal(w, e)
-			return
-		}
-		respond(w, 200, c)
-		return
+		return true, true
+	case mv != nil && norm.NFC.String(meta.Movie) != norm.NFC.String(mv.name):
+		invalid("TJA_MOVIE_MISMATCH", fmt.Sprintf("BGMOVIE 引用了「%s」，但你选择的是「%s」。请选择对应文件，或修改 TJA 的 BGMOVIE 后重新选择。", meta.Movie, mv.name), meta.Movie, mv.name)
+		return false, false
 	}
-	tjaFile, e := s.storeFile(ctx, tx, tf.path, tf.name, "tja", "application/octet-stream", tf.sha, tf.size)
-	if e != nil {
-		internal(w, e)
-		return
+	return false, true
+}
+
+// reservePending takes a place in the bounded queue of accepted uploads.
+func reservePending(w http.ResponseWriter, s *Server) bool {
+	select {
+	case s.pending <- struct{}{}:
+		return true
+	default:
+		problem(w, 503, "UPLOAD_BUSY", "当前排队处理的上传较多，请稍后重试")
+		return false
 	}
-	audioFile, e := s.storeFile(ctx, tx, af.path, af.name, extension, audio.MediaType(af.name), af.sha, af.size)
-	if e != nil {
-		internal(w, e)
-		return
-	}
-	var coverFile *int64
-	if coverData != nil {
-		id, e := s.storeImage(ctx, tx, coverData)
-		if e != nil {
-			internal(w, e)
-			return
-		}
-		coverFile = &id
-	}
-	titles, _ := json.Marshal(meta.TitleTranslations)
-	subtitles, _ := json.Marshal(meta.SubtitleTranslations)
-	var id int64
-	e = tx.QueryRow(ctx, `INSERT INTO charts(nijiiro_id,official_id,uploader_id,tja_file,audio_file,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
-		nijiiroID, officialID, u.User.ID, tjaFile, audioFile, coverFile, description, meta.Title, meta.Subtitle, meta.BPM, meta.Offset, demoStart, duration, titles, subtitles, flags, demoEnd).Scan(&id)
-	if e == nil {
-		e = database.SetDifficulties(ctx, tx, id, meta.Difficulties)
-	}
-	if e != nil {
-		internal(w, e)
-		return
-	}
-	if _, e = tx.Exec(ctx, `UPDATE upload_requests SET chart_id=$3 WHERE user_id=$1 AND idempotency_key=$2`, u.User.ID, key, id); e != nil {
-		internal(w, e)
-		return
-	}
-	if e = tx.Commit(ctx); e != nil {
-		internal(w, e)
-		return
-	}
-	s.previewAfter(ctx, id, af.path)
-	c, e := s.chart(ctx, id)
-	if e != nil {
-		internal(w, e)
-		return
-	}
-	respond(w, 201, c)
 }
 
 func validDescription(s string) bool {

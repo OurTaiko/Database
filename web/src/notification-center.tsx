@@ -12,8 +12,10 @@ import {
   EnvelopeSimpleIcon,
   ShieldWarningIcon,
   XIcon,
+  UploadSimpleIcon,
 } from '@phosphor-icons/react'
 import { api, jsonRequest } from '@/api/client'
+import { errorCodeMessage } from '@/api/error-message'
 import { endpoints } from '@/api/endpoints'
 import type { AppNotification, NotificationPage, NotificationSetting } from '@/api/types'
 import { Button } from '@/components/ui/button'
@@ -61,6 +63,34 @@ function useNotificationText() {
         return t('notificationCenter.text.comment_upvotes', { chart, count })
       case 'comment_removed':
         return t('notificationCenter.text.comment_removed', { chart })
+      case 'upload_result': {
+        const title = n.data.title || chart
+        if (n.data.status === 'failed')
+          return t('notificationCenter.text.upload_failed', {
+            title,
+            reason: errorCodeMessage(n.data.code ?? ''),
+          })
+        const updated = n.data.status === 'updated'
+        const skipped = (n.data.failedFiles ?? []).map(({ file, code }) =>
+          t('notificationCenter.text.upload_skipped_file', {
+            file:
+              file === 'cover'
+                ? t('notificationCenter.file.cover')
+                : file === 'movie'
+                  ? t('notificationCenter.file.movie')
+                  : file,
+            reason: errorCodeMessage(code),
+          }),
+        )
+        if (!skipped.length)
+          return t(`notificationCenter.text.${updated ? 'upload_updated' : 'upload_published'}`, {
+            title,
+          })
+        return t(
+          `notificationCenter.text.${updated ? 'upload_updated_partial' : 'upload_published_partial'}`,
+          { title, files: new Intl.ListFormat(i18n.resolvedLanguage).format(skipped) },
+        )
+      }
       case 'playlist_removed':
         return t('notificationCenter.text.playlist_removed', { name: n.data.name ?? '' })
       default:
@@ -85,6 +115,7 @@ const kindIcons: Record<string, ReactNode> = {
   dan_upvotes: <ArrowFatUpIcon weight="fill" className="text-don" />,
   comment_upvotes: <ArrowFatUpIcon weight="fill" className="text-don" />,
   comment_removed: <ShieldWarningIcon className="text-destructive" />,
+  upload_result: <UploadSimpleIcon />,
   playlist_removed: <ShieldWarningIcon className="text-destructive" />,
 }
 

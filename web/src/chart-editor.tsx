@@ -73,6 +73,8 @@ export function ChartEditorPage() {
   // Open while the server reads the text (review null) and until the update is confirmed.
   const [reviewing, setReviewing] = useState<{
     file: File
+    /** The text drops the movie the chart has. */
+    dropsMovie: boolean
     preview: ReplacementPreview | null
     review: Review | null
   } | null>(null)
@@ -188,7 +190,9 @@ export function ChartEditorPage() {
     const abort = new AbortController()
     controller.current = abort
     const file = new File([text], chart.tjaName, { type: 'text/plain;charset=utf-8' })
-    setReviewing({ file, preview: null, review: null })
+    // A stored movie stays while the text still declares BGMOVIE before its first #START.
+    const dropsMovie = !!chart.movieHash && !/^\s*BGMOVIE\s*:\s*\S/m.test(text.split(/#START/i)[0])
+    setReviewing({ file, dropsMovie, preview: null, review: null })
     try {
       const preview = await previewReplacement(
         chart.id,
@@ -200,6 +204,7 @@ export function ChartEditorPage() {
       if (abort.signal.aborted) return
       setReviewing({
         file,
+        dropsMovie,
         preview,
         review: reviewReplacement(chart, preview, proposal(chart), false, {
           demo: true,
@@ -246,7 +251,9 @@ export function ChartEditorPage() {
         controller.current.signal,
         setProgress,
         chart.id,
+        true,
       )
+      if ('status' in updated) throw new Error(t('messages.requestFailed'))
       requestKey.current = createRequestKey()
       attempted.current = ''
       setChart(updated)
@@ -383,7 +390,7 @@ export function ChartEditorPage() {
             audio: null,
             keptAudio: chart.audioName,
             cover: null,
-            movie: null,
+            movie: reviewing.dropsMovie ? 'remove' : null,
           }}
           onCancel={() => {
             controller.current?.abort()

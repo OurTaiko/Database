@@ -136,6 +136,10 @@ func main() {
 	if err = app.EnsureStorage(); err != nil {
 		log.Fatal(err)
 	}
+	// Staged files do not survive a restart: uploads still being processed are reported failed.
+	if err = app.FailInterruptedUploads(context.Background()); err != nil {
+		log.Fatal(err)
+	}
 	background, stopBackground := context.WithCancel(context.Background())
 	defer stopBackground()
 	go app.RunNotificationPrune(background)

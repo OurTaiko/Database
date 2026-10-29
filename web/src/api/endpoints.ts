@@ -51,7 +51,7 @@ export const endpoints = {
   chartFilesPreview: (id: number | string) => `${chartPath(id)}/files/preview`,
   cover: (id: number, hash?: string) =>
     withQuery(`${chartPath(id)}/cover`, hash ? { v: hash } : {}),
-  resource: (chart: Pick<Chart, 'id'>, kind: 'audio' | 'tja' | 'download') =>
+  resource: (chart: Pick<Chart, 'id'>, kind: 'audio' | 'tja' | 'download' | 'movie') =>
     `${chartPath(chart.id)}/${kind}`,
   leaderboard: (id: number | string, query: { difficultyId?: number; page: number }) =>
     withQuery(`${chartPath(id)}/leaderboard`, query),

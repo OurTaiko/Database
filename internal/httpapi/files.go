@@ -16,6 +16,7 @@ import (
 	"ourtaiko.dev/database/api/internal/audio"
 	"ourtaiko.dev/database/api/internal/objectstore"
 	"ourtaiko.dev/database/api/internal/tja"
+	"ourtaiko.dev/database/api/internal/video"
 )
 
 // publishedFile resolves one file role of a published chart without the
@@ -86,6 +87,13 @@ func (s *Server) streamAudio(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// streamMovie sends the chart's background movie (BGMOVIE), as Fanmade's /movie.
+func (s *Server) streamMovie(w http.ResponseWriter, r *http.Request) {
+	if key, _, digest, ok := s.publishedFile(w, r, "movie_file"); ok {
+		s.serveObject(w, r, key, digest+"."+video.Extension, digest, video.MediaType, "inline")
+	}
+}
+
 // streamPreview sends the game's song-select preview clip.
 func (s *Server) streamPreview(w http.ResponseWriter, r *http.Request) {
 	if key, _, digest, ok := s.publishedFile(w, r, "preview_file"); ok {
@@ -146,13 +154,27 @@ func (s *Server) downloadPackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer af.Close()
+	entries := []struct {
+		name string
+		file io.Reader
+	}{{c.TJAName, bytes.NewReader(chartText)}, {c.Wave, af}}
+	// The movie goes in under the name the stored TJA declares, as on Fanmade.
+	if c.MovieKey != "" {
+		mf, e := s.Config.Objects.Open(r.Context(), c.MovieKey)
+		if e != nil {
+			internal(w, e)
+			return
+		}
+		defer mf.Close()
+		entries = append(entries, struct {
+			name string
+			file io.Reader
+		}{tja.MovieName(stored), mf})
+	}
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": strings.TrimSuffix(c.TJAName, filepath.Ext(c.TJAName)) + ".zip"}))
 	z := zip.NewWriter(w)
-	for _, f := range []struct {
-		name string
-		file io.Reader
-	}{{c.TJAName, bytes.NewReader(chartText)}, {c.Wave, af}} {
+	for _, f := range entries {
 		dst, e := z.CreateHeader(&zip.FileHeader{Name: f.name, Method: zip.Store})
 		if e != nil {
 			return

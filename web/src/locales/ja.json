@@ -856,7 +856,13 @@
       "comment_upvotes": "「{{chart}}」へのあなたのコメントの高評価が {{count}} 件になりました",
       "comment_removed": "「{{chart}}」へのあなたのコメントが管理者により非表示になりました",
       "unknown": "新しい通知があります",
-      "playlist_removed": "あなたのプレイリスト「{{name}}」は管理者によって削除されました"
+      "playlist_removed": "あなたのプレイリスト「{{name}}」は管理者によって削除されました",
+      "upload_published": "「{{title}}」を公開しました",
+      "upload_updated": "「{{title}}」を更新しました",
+      "upload_published_partial": "「{{title}}」を公開しましたが、処理できなかったファイルは除外されました：{{files}}",
+      "upload_updated_partial": "「{{title}}」を更新しましたが、処理できなかったファイルは除外されました：{{files}}",
+      "upload_failed": "「{{title}}」のアップロードに失敗し、何も保存されませんでした：{{reason}}",
+      "upload_skipped_file": "{{file}}（{{reason}}）"
     },
     "settings": {
       "comment_reply": "自分のコメントへの返信",
@@ -866,6 +872,10 @@
       "dan_upvotes": "段位の高評価マイルストーン",
       "comment_upvotes": "コメントの高評価の節目",
       "comment_removed": "管理者による自分のコメントの非表示"
+    },
+    "file": {
+      "cover": "カバー",
+      "movie": "背景動画"
     }
   },
   "collaboration": {

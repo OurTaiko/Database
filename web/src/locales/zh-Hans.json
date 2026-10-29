@@ -856,7 +856,13 @@
       "comment_upvotes": "你在《{{chart}}》下的评论已获得 {{count}} 个赞",
       "comment_removed": "你在《{{chart}}》下的一条评论已被管理员移除",
       "unknown": "你有一条新通知",
-      "playlist_removed": "你的歌单“{{name}}”已被管理员删除"
+      "playlist_removed": "你的歌单“{{name}}”已被管理员删除",
+      "upload_published": "《{{title}}》已发布",
+      "upload_updated": "《{{title}}》已更新",
+      "upload_published_partial": "《{{title}}》已发布，但有文件未能处理、已被略过：{{files}}",
+      "upload_updated_partial": "《{{title}}》已更新，但有文件未能处理、已被略过：{{files}}",
+      "upload_failed": "《{{title}}》上传失败，没有保存任何文件：{{reason}}",
+      "upload_skipped_file": "{{file}}（{{reason}}）"
     },
     "settings": {
       "comment_reply": "有人回复我的评论",
@@ -866,6 +872,10 @@
       "dan_upvotes": "段位获赞里程碑",
       "comment_upvotes": "评论获赞里程碑",
       "comment_removed": "我的评论被管理员移除"
+    },
+    "file": {
+      "cover": "封面",
+      "movie": "背景视频"
     }
   },
   "collaboration": {

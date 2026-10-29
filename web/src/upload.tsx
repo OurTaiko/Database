@@ -19,6 +19,7 @@ import {
   UploadSimpleIcon as Upload,
 } from '@phosphor-icons/react'
 import { CoverPicker } from '@/components/cover-picker'
+import { MoviePicker } from '@/components/movie-picker'
 import { AudioPlayer } from '@/components/audio-player'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CategoryPicker } from './categories'
@@ -28,7 +29,7 @@ import { EmptyState } from '@/components/empty-state'
 import { Notice } from './notifications'
 import { useNotification } from './notification-context'
 import { useSession } from './session-context'
-import { isAudioFilename, maxAudio, maxTja } from './tja'
+import { isAudioFilename, isMovieFilename, maxAudio, maxTja } from './tja'
 import { officialIdPattern, parseBpm, parseNijiiroId } from './edit-metadata'
 import { audioDiffers, replacementFields, reviewReplacement } from './replacement-diff'
 import type { Proposal, ReplacementPreview, Review } from './replacement-diff'
@@ -41,13 +42,19 @@ function createRequestKey() {
 }
 type UploadMode = 'files' | 'song'
 
-/** The TJA's DEMOSTART as the server reads it: a header line before the first #START; 0 when absent. */
-async function fileDemoStart(tja: File) {
-  // The header is ASCII in every encoding the site accepts, so Latin-1 reads it.
+/**
+ * What the server reads from the TJA's headers before the first #START: DEMOSTART (0 when
+ * absent) and whether BGMOVIE names a movie. The server checks the file; this only fills the form.
+ */
+async function fileHeaders(tja: File) {
+  // The headers are ASCII in every encoding the site accepts, so Latin-1 reads them.
   const text = new TextDecoder('latin1').decode(await tja.slice(0, 256 * 1024).arrayBuffer())
   const header = text.split(/#START/i)[0]
-  const match = /^\s*DEMOSTART\s*:\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*$/im.exec(header)
-  return match ? Number(match[1]) : 0
+  const demo = /^\s*DEMOSTART\s*:\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*$/im.exec(header)
+  return {
+    demoStart: demo ? Number(demo[1]) : 0,
+    movie: /^\s*BGMOVIE\s*:\s*\S/m.test(header),
+  }
 }
 
 /**
@@ -140,6 +147,10 @@ export function UploadPage({
     controller = useRef<AbortController | null>(null)
   // The preview range starts as the new TJA's DEMOSTART for 15 seconds, as on Fanmade.
   const [fileDemo, setFileDemo] = useState<number | null>(null)
+  // The new TJA declares a background movie.
+  const [declaresMovie, setDeclaresMovie] = useState(false)
+  const [movie, setMovie] = useState<File | null>(null)
+  const hasStoredMovie = replacing && !!existing?.movieHash
   const [demoStart, setDemoStart] = useState('0'),
     [demoEnd, setDemoEnd] = useState('15')
   const [audioUrl, setAudioUrl] = useState('')
@@ -148,10 +159,12 @@ export function UploadPage({
   useEffect(() => {
     let active = true
     setFileDemo(null)
+    setDeclaresMovie(false)
     if (!tja) return
-    void fileDemoStart(tja).then((start) => {
+    void fileHeaders(tja).then(({ demoStart: start, movie: declared }) => {
       if (!active) return
       setFileDemo(start)
+      setDeclaresMovie(declared)
       setDemoStart(String(start))
       setDemoEnd(String(start + 15))
     })
@@ -204,13 +217,23 @@ export function UploadPage({
     if (busy) return
     const files = Array.from(e.dataTransfer.files),
       charts = files.filter((f) => /\.tja$/i.test(f.name)),
-      tracks = files.filter((f) => isAudioFilename(f.name))
-    if (charts.length > 1 || tracks.length > 1 || charts.length + tracks.length !== files.length) {
+      tracks = files.filter((f) => isAudioFilename(f.name)),
+      movies = files.filter((f) => isMovieFilename(f.name))
+    if (
+      charts.length > 1 ||
+      tracks.length > 1 ||
+      movies.length > 1 ||
+      charts.length + tracks.length + movies.length !== files.length
+    ) {
       notify(t('messages.dropOneTjaAndOneOggOrMp3NoAdditionalFiles'), 'error')
       return
     }
     if (charts[0]) choose('tja', charts[0])
     if (tracks[0]) choose('audio', tracks[0])
+    if (movies[0]) {
+      requestKey.current = createRequestKey()
+      setMovie(movies[0])
+    }
   }
   const fileError =
     mode === 'song'
@@ -327,6 +350,7 @@ export function UploadPage({
       } else {
         form.append('tja', tja!)
         if (audio) form.append('audio', audio)
+        if (movie) form.append('movie', movie)
       }
       if (cover) form.append('cover', cover)
       if (replacing) form.append('confirmReset', 'true')
@@ -348,6 +372,11 @@ export function UploadPage({
         setProgress,
         existing?.id,
       )
+      if ('status' in chart) {
+        navigate('/me/charts')
+        notify(t('messages.uploadAcceptedResultByNotification'), 'success')
+        return
+      }
       navigate(`/charts/${chart.id}`)
       notify(
         existing
@@ -527,6 +556,18 @@ export function UploadPage({
               </p>
             )}
             <CoverPicker file={cover} onChange={setCover} disabled={busy} />
+            <div className="flex min-w-0 flex-col gap-3">
+              <h3 className="text-sm font-extrabold">{t('messages.backgroundMovie')}</h3>
+              <MoviePicker
+                file={movie}
+                disabled={busy}
+                hint={hasStoredMovie ? t('messages.keepMovie') : t('messages.movieUpTo64Mib')}
+                onChange={(file) => {
+                  requestKey.current = createRequestKey()
+                  setMovie(file)
+                }}
+              />
+            </div>
           </Card>
         )}
         {mode === 'files' && tja && (
@@ -657,7 +698,11 @@ export function UploadPage({
             audio: audio && { name: audio.name, changed: reviewing.audioChanged },
             keptAudio: existing.audioName,
             cover: cover?.name ?? null,
-            movie: null,
+            movie: movie
+              ? { name: movie.name }
+              : !declaresMovie && hasStoredMovie
+                ? 'remove'
+                : null,
           }}
           onCancel={() => {
             controller.current?.abort()

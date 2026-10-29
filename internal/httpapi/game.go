@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"ourtaiko.dev/database/api/internal/audio"
 	"ourtaiko.dev/database/api/internal/objectstore"
+	"ourtaiko.dev/database/api/internal/video"
 )
 
 // The game API follows the protocol OurTaikoPlay speaks to the Fanmade
@@ -264,6 +265,12 @@ func (s *Server) resourceLinks(w http.ResponseWriter, r *http.Request) {
 	}
 	if e == nil {
 		if resources["preview"], e = link(previewKey, "preview", previewHash, "audio/ogg", previewSize); e != nil {
+			internal(w, e)
+			return
+		}
+	}
+	if c.MovieKey != "" {
+		if resources["movie"], e = link(c.MovieKey, "movie", c.MovieHash, video.MediaType, c.MovieSize); e != nil {
 			internal(w, e)
 			return
 		}

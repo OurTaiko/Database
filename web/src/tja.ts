@@ -1,6 +1,7 @@
 /** Largest TJA the site previews, matching the API's upload limit. */
 export const maxTja = 2 * 1024 * 1024
 export const maxAudio = 100 * 1024 * 1024
+export const maxMovie = 64 * 1024 * 1024
 
 export type Side = 'single' | 'p1' | 'p2'
 
@@ -52,6 +53,8 @@ export type Metadata = {
   wave: string
   difficulties: Difficulty[]
 }
+
+export const isMovieFilename = (name: string) => /\.(mp4|webm|mov)$/i.test(name)
 
 export function isAudioFilename(name: string) {
   return /\.(ogg|mp3)$/i.test(name)

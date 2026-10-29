@@ -37,6 +37,11 @@ export type Chart = Metadata & {
   audioHash: string
   audioSize: number
   coverHash?: string
+  /** Transcoded background movie; absent when the chart has none (as on Fanmade). */
+  movieHash?: string
+  movieSize?: number
+  /** MOVIEOFFSET in seconds. */
+  movieOffset?: number
   /** False for a song registered without a TJA and audio: no blocks, no duration, empty file fields. */
   hasFiles: boolean
   titleTranslations: Partial<Record<Locale, string>>
@@ -103,6 +108,11 @@ export type AppNotification = {
   comment: { id: string; parentId: string | null; excerpt: string } | null
   data: {
     upvotes?: number
+    /** upload_result: outcome of an upload the user did not wait for. */
+    status?: 'published' | 'updated' | 'failed' | (string & {})
+    title?: string
+    code?: string
+    failedFiles?: { file: string; code: string }[]
     /** playlist_removed: the deleted playlist's name. */
     name?: string
   } & Record<string, unknown>

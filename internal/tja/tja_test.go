@@ -60,10 +60,26 @@ func TestParseRejectsWhatTheDatabaseCannotHold(t *testing.T) {
 		"unclosed":         {strings.TrimSuffix(single, "#END\n"), "", "TJA_STRUCTURE_INVALID"},
 		"double, no side":  {strings.Replace(single, "#START", "STYLE:Double\n#START", 1), "", "TJA_PLAYER_REQUIRED"},
 		"invalid encoding": {"TITLE:\xff\xfe\x00", "", "TJA_ENCODING_INVALID"},
+		// The movie headers as Fanmade checks them.
+		"lowercase movie":     {strings.Replace(single, "WAVE:a.ogg", "WAVE:a.ogg\nbgmovie:a.mp4", 1), "", "TJA_MOVIE_INVALID"},
+		"repeated movie":      {strings.Replace(single, "WAVE:a.ogg", "WAVE:a.ogg\nBGMOVIE:a.mp4\nBGMOVIE:b.mp4", 1), "", "TJA_MOVIE_INVALID"},
+		"late movie":          {strings.Replace(single, "1,\n", "1,\nBGMOVIE:a.mp4\n", 1), "", "TJA_MOVIE_INVALID"},
+		"movie path":          {strings.Replace(single, "WAVE:a.ogg", "WAVE:a.ogg\nBGMOVIE:../a.mp4", 1), "", "TJA_MOVIE_PATH_INVALID"},
+		"movie format":        {strings.Replace(single, "WAVE:a.ogg", "WAVE:a.ogg\nBGMOVIE:a.avi", 1), "", "TJA_MOVIE_PATH_INVALID"},
+		"movie offset":        {strings.Replace(single, "WAVE:a.ogg", "WAVE:a.ogg\nMOVIEOFFSET:1201", 1), "", "TJA_MOVIE_OFFSET_INVALID"},
+		"offset not a number": {strings.Replace(single, "WAVE:a.ogg", "WAVE:a.ogg\nMOVIEOFFSET:soon", 1), "", "TJA_MOVIE_OFFSET_INVALID"},
 	} {
 		if _, issue := parseSource(t, test.source, test.audio); issue == nil || issue.Code != test.code {
 			t.Errorf("%s: issue = %v, want %s", name, issue, test.code)
 		}
+	}
+}
+
+// Valid movie headers are accepted, and STYLE:1 is one player as OpenTaiko reads it.
+func TestParseAcceptsMovieHeadersAndStyleOne(t *testing.T) {
+	source := "TITLE:S\nBPM:120\nWAVE:a.ogg\nBGMOVIE:a.webm\nMOVIEOFFSET:-1.5\nCOURSE:Oni\nSTYLE:1\nLEVEL:8\n#START\n1,\n#END\n"
+	if _, issue := parseSource(t, source, ""); issue != nil {
+		t.Fatal(issue)
 	}
 }
 

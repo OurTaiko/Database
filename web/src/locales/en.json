@@ -868,7 +868,13 @@
       "comment_upvotes": "Your comment on “{{chart}}” reached {{count}} upvotes",
       "comment_removed": "An administrator removed your comment on “{{chart}}”",
       "unknown": "You have a new notification",
-      "playlist_removed": "An administrator deleted your playlist \"{{name}}\""
+      "playlist_removed": "An administrator deleted your playlist \"{{name}}\"",
+      "upload_published": "\"{{title}}\" has been published",
+      "upload_updated": "\"{{title}}\" has been updated",
+      "upload_published_partial": "\"{{title}}\" has been published, but some files could not be processed and were left out: {{files}}",
+      "upload_updated_partial": "\"{{title}}\" has been updated, but some files could not be processed and were left out: {{files}}",
+      "upload_failed": "Uploading \"{{title}}\" failed and nothing was saved: {{reason}}",
+      "upload_skipped_file": "{{file}} ({{reason}})"
     },
     "settings": {
       "comment_reply": "Replies to my comments",
@@ -878,6 +884,10 @@
       "dan_upvotes": "Dan course upvote milestones",
       "comment_upvotes": "Upvote milestones on my comments",
       "comment_removed": "My comments removed by administrators"
+    },
+    "file": {
+      "cover": "Cover",
+      "movie": "Background video"
     }
   },
   "collaboration": {
