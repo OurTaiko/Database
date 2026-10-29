@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next'
 import { chartText } from '@/chart-language'
 import { i18n } from '@/i18n'
 import { endpoints } from '@/api/endpoints'
-import { DialogClose } from '@/components/ui/dialog'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -22,14 +21,17 @@ import {
 import { CoverPicker } from '@/components/cover-picker'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CategoryPicker } from './categories'
-import { api, uploadChart } from './api/client'
+import { api, previewReplacement, uploadChart } from './api/client'
 import type { Chart } from './api/types'
 import { EmptyState } from '@/components/empty-state'
-import { Modal, Notice } from './notifications'
+import { Notice } from './notifications'
 import { useNotification } from './notification-context'
 import { useSession } from './session-context'
 import { isAudioFilename, maxAudio, maxTja } from './tja'
 import { officialIdPattern, parseBpm, parseNijiiroId } from './edit-metadata'
+import { audioDiffers, replacementFields, reviewReplacement } from './replacement-diff'
+import type { Proposal, ReplacementPreview, Review } from './replacement-diff'
+import { ReplacementReview } from './replacement-review'
 
 function createRequestKey() {
   // getRandomValues remains available over LAN HTTP, unlike randomUUID.
@@ -86,8 +88,8 @@ export function UpdatePage() {
 // from its page. With `existing` the same form replaces that chart's files
 // through PUT /charts/{id}/files: a new TJA is required, the audio is kept
 // unless a new one is chosen, and the text fields start from the chart's
-// values. A chart that has files asks for confirmation first, since blocks
-// the new TJA no longer has go with their scores.
+// values. A chart that has files first shows what the replacement changes
+// (the server reads the new TJA), and its names can be kept.
 export function UploadPage({
   existing,
   embedded = false,
@@ -114,7 +116,13 @@ export function UploadPage({
   const [description, setDescription] = useState(existing?.description ?? ''),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(0)
-  const [confirming, setConfirming] = useState(false)
+  // A replacement's review: open while the new file is read (review null) and until confirmed.
+  const [reviewing, setReviewing] = useState<{
+    preview: ReplacementPreview | null
+    review: Review | null
+    audioChanged: boolean
+  } | null>(null)
+  const attemptedKeep = useRef('')
   // The audio of a chart that has files stays unless a new one is chosen.
   const replacing = !!existing?.hasFiles
   const retainedAudioName = replacing ? existing!.audioName : undefined
@@ -181,11 +189,60 @@ export function UploadPage({
       notify(t('db.songFieldsInvalid'), 'error')
       return
     }
-    if (replacing) setConfirming(true)
+    if (replacing) await startReview()
     else await save()
   }
-  const save = async () => {
-    setConfirming(false)
+  // The preview range and makers follow the file here; the record is what the form says.
+  const proposal = (): Proposal => ({
+    description,
+    categoryIds,
+    nijiiroId: nijiiroId.trim(),
+    officialId: officialId.trim(),
+    demoStart: 0,
+    demoEnd: 0,
+    typedMakers: {},
+    typedDemo: false,
+  })
+  const startReview = async () => {
+    const abort = new AbortController()
+    controller.current = abort
+    setReviewing({ preview: null, review: null, audioChanged: false })
+    try {
+      const [preview, audioChanged] = await Promise.all([
+        previewReplacement(existing!.id, tja!, audio?.name, session.csrfToken, abort.signal),
+        audioDiffers(existing!, audio),
+      ])
+      if (abort.signal.aborted) return
+      setReviewing({
+        preview,
+        audioChanged,
+        review: reviewReplacement(existing!, preview, proposal(), audioChanged, {
+          demo: false,
+          makers: false,
+        }),
+      })
+    } catch (e) {
+      setReviewing(null)
+      if (!abort.signal.aborted) notify((e as Error).message, 'error')
+    }
+  }
+  const save = async (kept = new Set<string>()) => {
+    const preview = reviewing?.preview
+    setReviewing(null)
+    const fields =
+      existing && preview
+        ? replacementFields(existing, preview, proposal(), kept)
+        : {
+            keepTitles: false,
+            description,
+            categoryIds,
+            nijiiroId: nijiiroId.trim(),
+            officialId: officialId.trim(),
+          }
+    // Other choices are a different request; the same choices retry the last one.
+    const choices = [...kept].sort().join(',')
+    if (choices !== attemptedKeep.current) requestKey.current = createRequestKey()
+    attemptedKeep.current = choices
     setBusy(true)
     setProgress(0)
     const abort = new AbortController()
@@ -202,10 +259,11 @@ export function UploadPage({
       }
       if (cover) form.append('cover', cover)
       if (replacing) form.append('confirmReset', 'true')
-      form.append('description', description)
-      form.append('categoryIds', JSON.stringify(categoryIds))
-      form.append('nijiiroId', nijiiroId.trim())
-      form.append('officialId', officialId.trim())
+      if (fields.keepTitles) form.append('keepTitles', 'true')
+      form.append('description', fields.description)
+      form.append('categoryIds', JSON.stringify(fields.categoryIds))
+      form.append('nijiiroId', fields.nijiiroId)
+      form.append('officialId', fields.officialId)
       const chart = await uploadChart(
         form,
         session.csrfToken,
@@ -473,25 +531,22 @@ export function UploadPage({
           )}
         </div>
       </form>
-      {confirming && existing && (
-        <Modal
-          title={t('messages.replaceSongAndDeleteAllPreviousScores')}
-          alert
-          onDismiss={() => setConfirming(false)}
-          actions={
-            <>
-              <DialogClose render={<Button type="button" variant="outline" size="default" />}>
-                {t('messages.cancel')}
-              </DialogClose>
-              <Button type="button" variant="default" size="default" onClick={() => void save()}>
-                {t('editor.confirm')}
-              </Button>
-            </>
-          }
-        >
-          <p>{t('db.replaceConfirmText', { title: existingTitle })}</p>
-          <p>{t('messages.allPlayersPreviousScoresChartsAndFilesForThisSongWillBe')}</p>
-        </Modal>
+      {reviewing && existing && (
+        <ReplacementReview
+          review={reviewing.review}
+          files={{
+            tja: tja?.name ?? '',
+            audio: audio && { name: audio.name, changed: reviewing.audioChanged },
+            keptAudio: existing.audioName,
+            cover: cover?.name ?? null,
+            movie: null,
+          }}
+          onCancel={() => {
+            controller.current?.abort()
+            setReviewing(null)
+          }}
+          onConfirm={(kept) => void save(kept)}
+        />
       )}
     </>
   )

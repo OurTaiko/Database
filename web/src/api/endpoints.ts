@@ -48,6 +48,7 @@ export const endpoints = {
     ),
   chart: chartPath,
   chartFiles: (id: number | string) => `${chartPath(id)}/files`,
+  chartFilesPreview: (id: number | string) => `${chartPath(id)}/files/preview`,
   cover: (id: number, hash?: string) =>
     withQuery(`${chartPath(id)}/cover`, hash ? { v: hash } : {}),
   resource: (chart: Pick<Chart, 'id'>, kind: 'audio' | 'tja' | 'download') =>

@@ -17,7 +17,7 @@ import (
 )
 
 // Text fields a replacement may carry; omitted ones keep the chart's values.
-var replacementFields = append(append([]string{}, uploadFields...), "confirmReset")
+var replacementFields = append(append([]string{}, uploadFields...), "confirmReset", "keepTitles")
 
 // replaceFiles replaces a chart's TJA and optionally its audio and cover,
 // keeping its ID, uploader and creation time: the contract of Fanmade's
@@ -177,7 +177,7 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 	// Hashes only what was sent, so a retry is answered before the files are
 	// judged again, and the receipt's file hashes tell whether a later
 	// replacement has superseded it.
-	payload := hash(strings.Join([]string{"replace", r.PathValue("id"), tf.sha, audioSHA, coverSHA, fields["description"], fields["categoryIds"], fields["nijiiroId"], fields["officialId"]}, "\n"))
+	payload := hash(strings.Join([]string{"replace", r.PathValue("id"), tf.sha, audioSHA, coverSHA, fields["description"], fields["categoryIds"], fields["nijiiroId"], fields["officialId"], fields["keepTitles"]}, "\n"))
 
 	ctx := context.WithoutCancel(r.Context())
 	tx, e := s.DB.Begin(ctx)
@@ -254,11 +254,15 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	titles, _ := json.Marshal(meta.TitleTranslations)
 	subtitles, _ := json.Marshal(meta.SubtitleTranslations)
-	// Names and their translations come from the new TJA again, as on Fanmade.
+	// Names and their translations come from the new TJA again, as on Fanmade,
+	// unless keepTitles keeps the chart's own.
+	keepTitles := fields["keepTitles"] == "true"
 	if _, e = tx.Exec(ctx, `UPDATE charts SET tja_file=$2,audio_file=$3,cover_file=$4,description=$5,category_flags=$6,nijiiro_id=$7,official_id=$8,
- title=$9,subtitle=$10,bpm=$11,offset_seconds=$12,demo_start=$13,demo_end=$14,duration=$15,title_translations=$16,subtitle_translations=$17 WHERE id=$1`,
+ bpm=$11,offset_seconds=$12,demo_start=$13,demo_end=$14,duration=$15,
+ title=CASE WHEN $18 THEN title ELSE $9 END,subtitle=CASE WHEN $18 THEN subtitle ELSE $10 END,
+ title_translations=CASE WHEN $18 THEN title_translations ELSE $16 END,subtitle_translations=CASE WHEN $18 THEN subtitle_translations ELSE $17 END WHERE id=$1`,
 		c.ID, tjaFile, audioFile, coverFile, description, flags, nijiiroID, officialID,
-		meta.Title, meta.Subtitle, meta.BPM, meta.Offset, demoStart, demoStart+15, duration, titles, subtitles); e != nil {
+		meta.Title, meta.Subtitle, meta.BPM, meta.Offset, demoStart, demoStart+15, duration, titles, subtitles, keepTitles); e != nil {
 		internal(w, e)
 		return
 	}

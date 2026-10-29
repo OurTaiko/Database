@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { endpoints } from '@/api/endpoints'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { DialogClose } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { ChoiceSelect } from '@/components/choice-select'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
@@ -15,17 +14,20 @@ import {
   FloppyDiskIcon,
   WarningCircleIcon,
 } from '@phosphor-icons/react'
-import { api, uploadChart } from './api/client'
+import { api, previewReplacement, uploadChart } from './api/client'
 import type { Chart } from './api/types'
 import { blockKey, baseCourse, courseNames, isSupportedCourse } from './courses'
 import { useSession } from './session-context'
-import { Modal, Notice } from './notifications'
+import { Notice } from './notifications'
 import { useNotification } from './notification-context'
 import { parsePreviewTja } from './preview-tja'
 import { maxTja } from './tja'
 import type { Side } from './tja'
 
 import { withChartTitles } from './tja-titles'
+import { replacementFields, reviewReplacement } from './replacement-diff'
+import type { ReplacementPreview, Review } from './replacement-diff'
+import { ReplacementReview } from './replacement-review'
 
 const ChartPreview = lazy(() => import('./chart-preview'))
 const TjaEditor = lazy(() => import('@/components/tja-editor'))
@@ -52,9 +54,10 @@ function errorLine(e: unknown): number | undefined {
 
 /**
  * Edits a chart's TJA in the browser with a live rendering. Saving sends the
- * text as the new TJA through the same replacement as uploading a file: the
- * audio, cover and record stay, blocks the new text no longer has go with
- * their scores, and older scores stop counting as the latest.
+ * text as the new TJA through the same replacement as uploading a file, after
+ * the same review of what it changes: the audio, cover and record stay,
+ * blocks the new text no longer has go with their scores, and older scores
+ * stop counting as the latest.
  */
 export function ChartEditorPage() {
   const { t } = useTranslation()
@@ -67,7 +70,13 @@ export function ChartEditorPage() {
   const [text, setText] = useState('')
   const [preview, setPreview] = useState('')
   const [course, setCourse] = useState('')
-  const [confirming, setConfirming] = useState(false)
+  // Open while the server reads the text (review null) and until the update is confirmed.
+  const [reviewing, setReviewing] = useState<{
+    file: File
+    preview: ReplacementPreview | null
+    review: Review | null
+  } | null>(null)
+  const attempted = useRef('')
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(0)
   const [saveError, setSaveError] = useState('')
@@ -159,22 +168,67 @@ export function ChartEditorPage() {
     [chart, blocks.keys],
   )
 
-  const save = async () => {
+  // The record is not sent and stays; only the names follow the new text unless kept.
+  const proposal = (current: Chart) => ({
+    description: current.description,
+    categoryIds: current.categoryIds,
+    demoStart: current.demoStart,
+    demoEnd: current.demoEnd,
+    typedMakers: {},
+    typedDemo: false,
+  })
+  const fail = (e: unknown) => {
+    setSaveError(e instanceof Error ? e.message : t('messages.requestFailed'))
+    const line = errorLine(e)
+    if (line) setJump({ line, at: Date.now() })
+  }
+  const startReview = async () => {
     if (!chart || !dirty || busy) return
-    setConfirming(false)
     setSaveError('')
+    const abort = new AbortController()
+    controller.current = abort
+    const file = new File([text], chart.tjaName, { type: 'text/plain;charset=utf-8' })
+    setReviewing({ file, preview: null, review: null })
+    try {
+      const preview = await previewReplacement(
+        chart.id,
+        file,
+        undefined,
+        session.csrfToken,
+        abort.signal,
+      )
+      if (abort.signal.aborted) return
+      setReviewing({
+        file,
+        preview,
+        review: reviewReplacement(chart, preview, proposal(chart), false, {
+          demo: false,
+          makers: false,
+        }),
+      })
+    } catch (e) {
+      setReviewing(null)
+      if (!abort.signal.aborted) fail(e)
+    }
+  }
+  const save = async (kept: Set<string>) => {
+    if (!chart || !reviewing?.preview || busy) return
+    const { file, preview } = reviewing
+    setReviewing(null)
     setBusy(true)
     setProgress(0)
     controller.current = new AbortController()
     try {
+      const { keepTitles } = replacementFields(chart, preview, proposal(chart), kept)
+      // Other text or choices are a different request; the same ones retry the last.
+      const attempt = [...kept].sort().join(',') + '\n' + text
+      if (attempt !== attempted.current) requestKey.current = createRequestKey()
+      attempted.current = attempt
       const form = new FormData()
-      form.append(
-        'tja',
-        new File([text], chart.tjaName, { type: 'text/plain;charset=utf-8' }),
-        chart.tjaName,
-      )
+      form.append('tja', file, chart.tjaName)
       form.append('encoding', 'utf-8')
       form.append('confirmReset', 'true')
+      if (keepTitles) form.append('keepTitles', 'true')
       const updated = await uploadChart(
         form,
         session.csrfToken,
@@ -184,13 +238,12 @@ export function ChartEditorPage() {
         chart.id,
       )
       requestKey.current = createRequestKey()
+      attempted.current = ''
       setChart(updated)
       setOriginal(text)
       notify(t('editor.saved'), 'success')
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : t('messages.requestFailed'))
-      const line = errorLine(e)
-      if (line) setJump({ line, at: Date.now() })
+      fail(e)
     } finally {
       setBusy(false)
     }
@@ -239,7 +292,7 @@ export function ChartEditorPage() {
             variant="default"
             size="default"
             disabled={!dirty || busy || !!blocks.error}
-            onClick={() => setConfirming(true)}
+            onClick={() => void startReview()}
           >
             <FloppyDiskIcon size={16} />
             {busy ? t('messages.saving') : t('editor.save')}
@@ -271,7 +324,7 @@ export function ChartEditorPage() {
               disabled={busy}
               jumpToLine={jump}
               onSave={() => {
-                if (dirty && !busy && !blocks.error) setConfirming(true)
+                if (dirty && !busy && !blocks.error && !reviewing) void startReview()
               }}
               ariaLabel={t('editor.editorLabel')}
               className="h-[70svh] min-h-80 border-t text-sm"
@@ -312,27 +365,22 @@ export function ChartEditorPage() {
           )}
         </Card>
       </div>
-      {confirming && (
-        <Modal
-          title={t('editor.confirmTitle')}
-          busy={busy}
-          onDismiss={() => setConfirming(false)}
-          actions={
-            <>
-              <DialogClose
-                render={<Button type="button" variant="outline" size="default" />}
-                disabled={busy}
-              >
-                {t('messages.cancel')}
-              </DialogClose>
-              <Button type="button" variant="default" size="default" onClick={save}>
-                {t('editor.confirm')}
-              </Button>
-            </>
-          }
-        >
-          <p>{t('editor.confirmText', { title })}</p>
-        </Modal>
+      {reviewing && (
+        <ReplacementReview
+          review={reviewing.review}
+          files={{
+            tja: chart.tjaName,
+            audio: null,
+            keptAudio: chart.audioName,
+            cover: null,
+            movie: null,
+          }}
+          onCancel={() => {
+            controller.current?.abort()
+            setReviewing(null)
+          }}
+          onConfirm={(kept) => void save(kept)}
+        />
       )}
     </div>
   )
