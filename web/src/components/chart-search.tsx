@@ -4,6 +4,7 @@ import { ChoiceSelect } from '@/components/choice-select'
 import { SearchInput } from '@/components/search-input'
 import { categoryName, useCategories } from '@/categories'
 import { cn } from '@/lib/utils'
+import { categoryColor } from '@/category-colors'
 
 export const chartOrders = [
   'hot',
@@ -116,6 +117,13 @@ export function ChartSearch({
                   )}
                   onClick={() => onChange({ category: category.id })}
                 >
+                  {categoryColor(category.id) && (
+                    <span
+                      aria-hidden="true"
+                      className="size-2.5 shrink-0 rounded-full border-[1.5px] border-[#382d2a]"
+                      style={{ background: categoryColor(category.id) }}
+                    />
+                  )}
                   {category.id ? categoryName(category) : category.title}
                   {counts && (
                     <span
