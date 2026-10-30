@@ -136,6 +136,10 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if e := applyDifficultyMakers(fields["difficultyMakers"], meta.Difficulties); e != nil {
+		problem(w, 422, "MAKERS_INVALID", e.Error())
+		return
+	}
 	keepMovie, ok := checkMovie(w, meta, mv, &c)
 	if !ok {
 		return
@@ -144,7 +148,7 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Hashes only what was sent, so a retry is answered before the files are judged again.
-	parts := []string{"replace", c.ID, tf.name, tf.sha, fields["description"], fields["categoryIds"], fields["nijiiroId"], fields["officialId"], fields["keepTitles"], fields["demoStart"], fields["demoEnd"]}
+	parts := []string{"replace", c.ID, tf.name, tf.sha, fields["description"], fields["categoryIds"], fields["nijiiroId"], fields["officialId"], fields["keepTitles"], fields["demoStart"], fields["demoEnd"], fields["difficultyMakers"]}
 	for _, f := range []*stagedFile{af, cf, mv} {
 		if f != nil {
 			parts = append(parts, f.name, f.sha)

@@ -84,7 +84,7 @@ func identifiers(nijiiro, official string) (*int32, *string, bool) {
 // Text fields a chart submission may carry besides its files. title,
 // subtitle and bpm describe a song registered without files (R038); with a
 // TJA they are ignored, as the file is the source of those.
-var uploadFields = []string{"description", "categoryIds", "nijiiroId", "officialId", "title", "subtitle", "bpm", "demoStart", "demoEnd"}
+var uploadFields = []string{"difficultyMakers", "description", "categoryIds", "nijiiroId", "officialId", "title", "subtitle", "bpm", "demoStart", "demoEnd"}
 
 // receiveUploadForm stages the multipart files tja, audio and cover of a
 // submission in dir and collects the text fields named in allowed. On a bad
@@ -161,13 +161,21 @@ func receiveUploadForm(w http.ResponseWriter, r *http.Request, dir string, allow
 				problem(w, 400, "UPLOAD_FILES_INVALID", "上传字段重复或格式错误")
 				return nil, nil, false
 			}
-			data, e := io.ReadAll(io.LimitReader(part, 4001))
+			limit := 4000
+			if field == "difficultyMakers" {
+				limit = 64 * 1024
+			}
+			data, e := io.ReadAll(io.LimitReader(part, int64(limit)+1))
 			if e != nil {
 				uploadReadError(w, e)
 				return nil, nil, false
 			}
-			if len(data) > 4000 {
-				problem(w, 400, "DESCRIPTION_TOO_LONG", "说明不能超过 4000 字节")
+			if len(data) > limit {
+				if field == "difficultyMakers" {
+					problem(w, 400, "UPLOAD_FIELD_TOO_LONG", "制作者表格不能超过 64 KiB")
+				} else {
+					problem(w, 400, "DESCRIPTION_TOO_LONG", "说明不能超过 4000 字节")
+				}
 				return nil, nil, false
 			}
 			fields[field] = string(data)
@@ -246,6 +254,10 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if e := applyDifficultyMakers(fields["difficultyMakers"], meta.Difficulties); e != nil {
+		problem(w, 422, "MAKERS_INVALID", e.Error())
+		return
+	}
 	keepMovie, ok := checkMovie(w, meta, mv, nil)
 	if !ok {
 		return
@@ -253,7 +265,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	if !reservePending(w, s) {
 		return
 	}
-	parts := []string{tf.name, tf.sha, af.name, af.sha, description, strings.Join(categoryIDs, ","), fields["nijiiroId"], fields["officialId"], fields["demoStart"], fields["demoEnd"]}
+	parts := []string{tf.name, tf.sha, af.name, af.sha, description, strings.Join(categoryIDs, ","), fields["nijiiroId"], fields["officialId"], fields["demoStart"], fields["demoEnd"], fields["difficultyMakers"]}
 	for _, f := range []*stagedFile{cf, mv} {
 		if f != nil {
 			parts = append(parts, f.name, f.sha)
@@ -496,6 +508,8 @@ type metadataPatch struct {
 	// The preview range in seconds, within the audio; a chart without files has none to set.
 	DemoStart json.RawMessage `json:"demoStart"`
 	DemoEnd   json.RawMessage `json:"demoEnd"`
+	// Every block's maker, as [{course, side, maker}], as on Fanmade.
+	DifficultyMakers json.RawMessage `json:"difficultyMakers"`
 }
 
 func validDisplayText(s string) bool {
@@ -647,10 +661,24 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 		problem(w, 422, "TRANSLATIONS_INVALID", "译名必须为 en / ja / zh / ko 到不超过 500 字节文本的映射")
 		return
 	}
+	makers := c.Difficulties
+	if len(patch.DifficultyMakers) > 0 {
+		makers = append([]tja.Difficulty(nil), c.Difficulties...)
+		if e := applyDifficultyMakers(string(patch.DifficultyMakers), makers); e != nil {
+			problem(w, 422, "MAKERS_INVALID", e.Error())
+			return
+		}
+	}
 	titles, _ := json.Marshal(c.TitleTranslations)
 	subtitles, _ := json.Marshal(c.SubtitleTranslations)
+	tx, e := s.DB.Begin(r.Context())
+	if e != nil {
+		internal(w, e)
+		return
+	}
+	defer tx.Rollback(r.Context())
 	// update_at is refreshed by the charts trigger only when something changed.
-	tag, e := s.DB.Exec(r.Context(), `UPDATE charts c SET description=$2,category_flags=$3,nijiiro_id=$4,official_id=$5,title_translations=$6,subtitle_translations=$7,title=$8,subtitle=$9,bpm=$10,demo_start=$11,demo_end=$12 WHERE c.id=$1 AND `+publishedChart,
+	tag, e := tx.Exec(r.Context(), `UPDATE charts c SET description=$2,category_flags=$3,nijiiro_id=$4,official_id=$5,title_translations=$6,subtitle_translations=$7,title=$8,subtitle=$9,bpm=$10,demo_start=$11,demo_end=$12 WHERE c.id=$1 AND `+publishedChart,
 		c.ID, description, flags, nijiiroID, officialID, titles, subtitles, title, subtitle, bpm, demoStart, demoEnd)
 	if e != nil {
 		internal(w, e)
@@ -658,6 +686,19 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	if tag.RowsAffected() == 0 {
 		problem(w, 404, "CHART_NOT_FOUND", "谱面不存在或已删除")
+		return
+	}
+	// A changed block refreshes the chart's update_at by trigger.
+	for i, d := range makers {
+		if d.Maker != c.Difficulties[i].Maker {
+			if _, e = tx.Exec(r.Context(), `UPDATE chart_difficulties SET maker=$2 WHERE id=$1`, d.ID, d.Maker); e != nil {
+				internal(w, e)
+				return
+			}
+		}
+	}
+	if e = tx.Commit(r.Context()); e != nil {
+		internal(w, e)
 		return
 	}
 	if demoStart != c.DemoStart || demoEnd != c.DemoEnd {
