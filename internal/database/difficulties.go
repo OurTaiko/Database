@@ -13,7 +13,7 @@ import (
 // SetDifficulties makes chart_difficulties hold exactly the given blocks of a
 // chart. Rows are rewritten only when something differs, so storing the same
 // file again neither changes their IDs nor touches the chart's update_at.
-func SetDifficulties(ctx context.Context, tx pgx.Tx, chartID int64, blocks []tja.Difficulty) error {
+func SetDifficulties(ctx context.Context, tx pgx.Tx, chartID string, blocks []tja.Difficulty) error {
 	rows, err := tx.Query(ctx, `SELECT course,side,level,maker,branching,COALESCE(content_hash,'') FROM chart_difficulties WHERE chart_id=$1`, chartID)
 	if err != nil {
 		return err

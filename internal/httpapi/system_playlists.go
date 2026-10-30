@@ -43,12 +43,12 @@ func systemPlaylistByID(id string) *systemPlaylist {
 	return nil
 }
 
-func (p *systemPlaylist) chartIDs(ctx context.Context, db playlistQuerier) ([]int64, error) {
+func (p *systemPlaylist) chartIDs(ctx context.Context, db playlistQuerier) ([]string, error) {
 	rows, e := db.Query(ctx, p.query)
 	if e != nil {
 		return nil, e
 	}
-	return pgx.CollectRows(rows, pgx.RowTo[int64])
+	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
 func (p *systemPlaylist) playlist(charts int) Playlist {

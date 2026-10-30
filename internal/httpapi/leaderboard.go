@@ -19,7 +19,7 @@ type leaderboardEntry struct {
 }
 
 type leaderboardResponse struct {
-	SongID       int64              `json:"songId"`
+	SongID       string             `json:"songId"`
 	DifficultyID int64              `json:"difficultyId"`
 	Course       string             `json:"course"`
 	Side         string             `json:"side"`

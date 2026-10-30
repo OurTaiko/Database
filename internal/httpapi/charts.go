@@ -17,7 +17,9 @@ import (
 )
 
 type Chart struct {
-	ID int64 `json:"id"`
+	ID string `json:"id"`
+	// NumberID is the chart's short number, also accepted by GET /charts/{id} (R051).
+	NumberID int64 `json:"numberId"`
 	// NijiiroID and OfficialID are null when unknown.
 	NijiiroID  *int32  `json:"nijiiroId"`
 	OfficialID *string `json:"officialId"`
@@ -68,7 +70,7 @@ const chartScoreSQL = `COALESCE((SELECT upvotes-downvotes FROM chart_stats WHERE
 
 const playableChart = publishedChart + ` AND c.tja_file IS NOT NULL`
 
-const chartSelect = `SELECT c.id,c.nijiiro_id,c.official_id,c.uploader_id,c.description,c.created_at,c.update_at,c.duration,c.demo_end,c.category_flags,
+const chartSelect = `SELECT c.id,c.number_id,c.nijiiro_id,c.official_id,c.uploader_id,c.description,c.created_at,c.update_at,c.duration,c.demo_end,c.category_flags,
  COALESCE(tf.original_filename,''),COALESCE(af.original_filename,''),COALESCE(tf.sha256,''),COALESCE(tf.byte_size,0),COALESCE(af.sha256,''),COALESCE(af.byte_size,0),COALESCE(tf.storage_key,''),COALESCE(af.storage_key,''),COALESCE(cf.sha256,''),COALESCE(cf.storage_key,''),
  c.title,c.subtitle,c.bpm,c.offset_seconds,c.demo_start,COALESCE(af.sha256||'.'||af.extension,''),c.title_translations,c.subtitle_translations,
  (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',d.id,'course',d.course,'side',d.side,'level',d.level,'maker',d.maker,'branching',d.branching,'chartHash',d.content_hash)
@@ -83,7 +85,7 @@ func readChart(row pgx.Row) (Chart, error) {
 	var c Chart
 	var difficulties []byte
 	var flags CategoryFlags
-	e := row.Scan(&c.ID, &c.NijiiroID, &c.OfficialID, &c.UploaderID, &c.Description, &c.CreatedAt, &c.UpdateAt, &c.Duration, &c.DemoEnd, &flags,
+	e := row.Scan(&c.ID, &c.NumberID, &c.NijiiroID, &c.OfficialID, &c.UploaderID, &c.Description, &c.CreatedAt, &c.UpdateAt, &c.Duration, &c.DemoEnd, &flags,
 		&c.TJAName, &c.AudioName, &c.TJAHash, &c.TJASize, &c.AudioHash, &c.AudioSize, &c.TJAKey, &c.AudioKey, &c.CoverHash, &c.CoverKey,
 		&c.Title, &c.Subtitle, &c.BPM, &c.Offset, &c.DemoStart, &c.Wave, &c.TitleTranslations, &c.SubtitleTranslations, &difficulties,
 		&c.Upvotes, &c.Downvotes, &c.CommentCount, &c.MovieOffset, &c.MovieHash, &c.MovieSize, &c.MovieKey)
@@ -124,18 +126,35 @@ func readCharts(rows pgx.Rows) ([]Chart, error) {
 	return items, rows.Err()
 }
 
-// chartID parses the {id} path value; chart IDs are positive bigints.
-func chartID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, e := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if e != nil || id <= 0 {
+// chartID checks the {id} path value; chart IDs are 32 lowercase hex digits, as Fanmade's.
+func chartID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id := r.PathValue("id")
+	if !validChartID(id) {
 		problem(w, 404, "CHART_NOT_FOUND", "谱面不存在或已删除")
-		return 0, false
+		return "", false
 	}
 	return id, true
 }
 
-func (s *Server) chart(ctx context.Context, id int64) (Chart, error) {
-	c, e := readChart(s.DB.QueryRow(ctx, chartSelect+` WHERE c.id=$1 AND `+publishedChart, id))
+func validChartID(id string) bool {
+	if len(id) != 32 {
+		return false
+	}
+	for _, c := range id {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Server) chart(ctx context.Context, id string) (Chart, error) {
+	return s.chartWhere(ctx, "c.id", id)
+}
+
+// chartWhere reads the published chart whose column (c.id or c.number_id) is value.
+func (s *Server) chartWhere(ctx context.Context, column string, value any) (Chart, error) {
+	c, e := readChart(s.DB.QueryRow(ctx, chartSelect+` WHERE `+column+`=$1 AND `+publishedChart, value))
 	if e == nil {
 		items := []Chart{c}
 		s.chartNames(ctx, items)
@@ -184,14 +203,14 @@ const pageSize = 24
 // keywordNumber(q). An empty keyword matches every chart.
 func keywordClause(q, number string) string {
 	return `(` + q + `='' OR c.title ILIKE '%'||` + q + `||'%' OR c.subtitle ILIKE '%'||` + q + `||'%' OR c.official_id ILIKE '%'||` + q + `||'%'
- OR c.nijiiro_id=` + number + ` OR c.id=` + number + `
+ OR c.nijiiro_id=` + number + ` OR c.number_id=` + number + `
  OR EXISTS(SELECT 1 FROM chart_difficulties dm WHERE dm.chart_id=c.id AND dm.maker ILIKE '%'||` + q + `||'%')
  OR EXISTS(SELECT 1 FROM jsonb_each_text(c.title_translations) t WHERE t.value ILIKE '%'||` + q + `||'%')
  OR EXISTS(SELECT 1 FROM jsonb_each_text(c.subtitle_translations) t WHERE t.value ILIKE '%'||` + q + `||'%'))`
 }
 
 // keywordNumber lets a number also find the chart with that Nijiiro ID or
-// database ID; -1 matches none.
+// number ID; -1 matches none.
 func keywordNumber(q string) int64 {
 	if n, e := strconv.ParseInt(q, 10, 64); e == nil && n > 0 {
 		return n
@@ -321,12 +340,37 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, uploader string)
 	respond(w, 200, map[string]any{"items": items, "total": total, "page": page, "pageSize": pageSize})
 }
 
+// detail answers GET /charts/{id}: by=number looks {id} up as the chart's number, by=id as its
+// ID, and without by its form decides.
 func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
-	id, ok := chartID(w, r)
-	if !ok {
+	raw, column := r.PathValue("id"), ""
+	var value any = raw
+	by := r.URL.Query().Get("by")
+	if by == "" {
+		// Without by, the form tells: an ID has 32 hex digits, a number at most 19.
+		by = "number"
+		if validChartID(raw) {
+			by = "id"
+		}
+	}
+	switch by {
+	case "number":
+		if n, e := strconv.ParseInt(raw, 10, 64); e == nil && n > 0 && raw[0] != '0' {
+			column, value = "c.number_id", n
+		}
+	case "id":
+		if validChartID(raw) {
+			column = "c.id"
+		}
+	default:
+		problem(w, 400, "QUERY_INVALID", "by 只能是 number 或 id")
 		return
 	}
-	c, e := s.chart(r.Context(), id)
+	e := pgx.ErrNoRows
+	var c Chart
+	if column != "" {
+		c, e = s.chartWhere(r.Context(), column, value)
+	}
 	if errors.Is(e, pgx.ErrNoRows) {
 		problem(w, 404, "CHART_NOT_FOUND", "谱面不存在或已删除")
 		return
@@ -403,7 +447,7 @@ func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
 
 // deleteChart removes a chart's scores and row, returning the file records it
 // referenced.
-func (s *Server) deleteChart(ctx context.Context, id int64) ([]int64, error) {
+func (s *Server) deleteChart(ctx context.Context, id string) ([]int64, error) {
 	tx, e := s.DB.Begin(ctx)
 	if e != nil {
 		return nil, e

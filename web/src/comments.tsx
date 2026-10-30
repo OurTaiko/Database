@@ -45,7 +45,7 @@ const maxVisibleDepth = 8
 // Comments at or below this score start collapsed.
 const collapseScore = -5
 
-export const commentPath = (chartId: number | string, commentId: string) =>
+export const commentPath = (chartId: string, commentId: string) =>
   `/charts/${encodeURIComponent(chartId)}/comments/${encodeURIComponent(commentId)}`
 export const danCommentPath = (danId: string, commentId: string) =>
   `/dans/${encodeURIComponent(danId)}/comments/${encodeURIComponent(commentId)}`
@@ -730,10 +730,7 @@ export function CommentSection({
             {t('interactions.viewAllComments')}
           </Link>
           {items?.[0]?.parentId && (
-            <Link
-              to={subject.commentPath(items[0].parentId)}
-              className="text-link hover:underline"
-            >
+            <Link to={subject.commentPath(items[0].parentId)} className="text-link hover:underline">
               {t('interactions.viewParent')}
             </Link>
           )}

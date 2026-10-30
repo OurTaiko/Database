@@ -202,7 +202,7 @@ func cleanDanRewards(raw json.RawMessage) (json.RawMessage, bool) {
 }
 
 type danSongRow struct {
-	chartID      int64
+	chartID      string
 	course, side string
 	hidden       bool
 }
@@ -243,8 +243,8 @@ func (s *Server) checkDan(ctx context.Context, w http.ResponseWriter, in danInpu
 	}
 	songs := []danSongRow{}
 	for _, song := range in.Songs {
-		chart, err := strconv.ParseInt(song.ChartID, 10, 64)
-		if !danCourses[song.Course] || err != nil || chart <= 0 {
+		chart := song.ChartID
+		if !danCourses[song.Course] || !validChartID(chart) {
 			problem(w, 422, "DAN_INVALID", "歌曲或难度无效")
 			return nil, nil, nil, nil, false
 		}
@@ -253,7 +253,7 @@ func (s *Server) checkDan(ctx context.Context, w http.ResponseWriter, in danInpu
 			return nil, nil, nil, nil, false
 		}
 		var hashed bool
-		err = s.DB.QueryRow(ctx, `SELECT d.content_hash IS NOT NULL FROM charts c JOIN chart_difficulties d ON d.chart_id=c.id
+		err := s.DB.QueryRow(ctx, `SELECT d.content_hash IS NOT NULL FROM charts c JOIN chart_difficulties d ON d.chart_id=c.id
  WHERE c.id=$1 AND `+publishedChart+` AND d.course=$2 AND d.side=$3`, chart, song.Course, song.Side).Scan(&hashed)
 		if errors.Is(err, pgx.ErrNoRows) {
 			problem(w, 422, "DAN_SONG_NOT_FOUND", "找不到歌曲或该难度的这个谱面块："+song.ChartID)
@@ -346,7 +346,7 @@ func (s *Server) loadDans(ctx context.Context, where string, args ...any) ([]Dan
 		id, _ := strconv.ParseInt(c.ID, 10, 64)
 		ids = append(ids, id)
 	}
-	rows, err = s.DB.Query(ctx, `SELECT s.course_id,s.chart_id::text,s.course,s.side,s.hidden,COALESCE(c.title,''),COALESCE(c.subtitle,''),
+	rows, err = s.DB.Query(ctx, `SELECT s.course_id,s.chart_id,s.course,s.side,s.hidden,COALESCE(c.title,''),COALESCE(c.subtitle,''),
  COALESCE((SELECT b.level FROM chart_difficulties b WHERE b.chart_id=s.chart_id AND b.course=s.course AND b.side=s.side),0),
  s.valid,COALESCE(c.status='published' AND s.valid,false)
  FROM dan_course_songs s LEFT JOIN charts c ON c.id=s.chart_id

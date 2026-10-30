@@ -6,7 +6,7 @@ function withQuery(url: string, values: Record<string, string | number>): string
   for (const [key, value] of Object.entries(values)) query.set(key, String(value))
   return query.size ? `${url}?${query}` : url
 }
-const chartPath = (id: number | string) => `${API_ROOT}/charts/${encodeURIComponent(id)}`
+const chartPath = (id: string) => `${API_ROOT}/charts/${encodeURIComponent(id)}`
 const playlistPath = (id: string) => `${API_ROOT}/playlists/${encodeURIComponent(id)}`
 
 /** Filters of the chart list; an empty value does not filter. */
@@ -46,19 +46,22 @@ export const endpoints = {
       `${API_ROOT}${mine ? '/me/charts' : '/charts'}`,
       Object.fromEntries(Object.entries(query).filter(([, value]) => value !== '')),
     ),
+  /** Writes (PATCH, DELETE); reading a chart goes through chartDetail. */
   chart: chartPath,
-  chartFiles: (id: number | string) => `${chartPath(id)}/files`,
-  chartFilesPreview: (id: number | string) => `${chartPath(id)}/files/preview`,
-  cover: (id: number, hash?: string) =>
+  /** GET /charts/{id} looks for the chart's number unless told by=id. */
+  chartDetail: (id: string) => withQuery(chartPath(id), { by: 'id' }),
+  chartFiles: (id: string) => `${chartPath(id)}/files`,
+  chartFilesPreview: (id: string) => `${chartPath(id)}/files/preview`,
+  cover: (id: string, hash?: string) =>
     withQuery(`${chartPath(id)}/cover`, hash ? { v: hash } : {}),
   resource: (chart: Pick<Chart, 'id'>, kind: 'audio' | 'tja' | 'download' | 'movie') =>
     `${chartPath(chart.id)}/${kind}`,
-  leaderboard: (id: number | string, query: { difficultyId?: number; page: number }) =>
+  leaderboard: (id: string, query: { difficultyId?: number; page: number }) =>
     withQuery(`${chartPath(id)}/leaderboard`, query),
-  chartVote: (id: number | string) => `${chartPath(id)}/vote`,
-  chartComments: (id: number | string, query: { sort: string; page: number }) =>
+  chartVote: (id: string) => `${chartPath(id)}/vote`,
+  chartComments: (id: string, query: { sort: string; page: number }) =>
     withQuery(`${chartPath(id)}/comments`, query),
-  newComment: (chartId: number | string) => `${chartPath(chartId)}/comments`,
+  newComment: (chartId: string) => `${chartPath(chartId)}/comments`,
   comment: (id: string) => `${API_ROOT}/comments/${encodeURIComponent(id)}`,
   commentThread: (id: string, sort: string) =>
     withQuery(`${API_ROOT}/comments/${encodeURIComponent(id)}`, { sort }),

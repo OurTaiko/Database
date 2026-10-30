@@ -29,7 +29,7 @@ const (
 type Comment struct {
 	ID string `json:"id"`
 	// A comment hangs on a chart or on a 段位 course; the other is empty.
-	ChartID         int64             `json:"chartId,omitempty"`
+	ChartID         string            `json:"chartId,omitempty"`
 	ChartTitle      string            `json:"chartTitle,omitempty"`
 	DanID           string            `json:"danId,omitempty"`
 	DanTitle        map[string]string `json:"danTitle,omitempty"`
@@ -66,7 +66,8 @@ const publishedSubject = `((m.chart_id IS NOT NULL AND ` + publishedChart + `) O
 
 // commentSubject is what a thread hangs on: a published chart or 段位 course.
 type commentSubject struct {
-	chartID, danID int64
+	chartID string
+	danID   int64
 	// Who is told about new top-level comments and upvote milestones.
 	owner        string
 	commentCount int
@@ -79,7 +80,7 @@ func (t commentSubject) column() string {
 	return "chart_id"
 }
 
-func (t commentSubject) id() int64 {
+func (t commentSubject) id() any {
 	if t.danID != 0 {
 		return t.danID
 	}
@@ -96,12 +97,13 @@ type rowScanner interface {
 
 func chartSubject(w http.ResponseWriter, r *http.Request, db rowScanner, lock string) (commentSubject, bool) {
 	var t commentSubject
-	id, e := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if e == nil {
+	id := r.PathValue("id")
+	var e error = pgx.ErrNoRows
+	if validChartID(id) {
 		e = db.QueryRow(r.Context(), `SELECT c.id,c.uploader_id,COALESCE((SELECT comment_count FROM chart_stats WHERE chart_id=c.id),0)
 		 FROM charts c WHERE c.id=$1 AND `+publishedChart+` `+lock, id).Scan(&t.chartID, &t.owner, &t.commentCount)
 	}
-	if e != nil && (errors.Is(e, pgx.ErrNoRows) || t.chartID == 0) {
+	if errors.Is(e, pgx.ErrNoRows) {
 		problem(w, 404, "CHART_NOT_FOUND", "谱面不存在或已删除")
 		return t, false
 	}
@@ -176,7 +178,8 @@ func readComments(ctx context.Context, db rowQuerier, withTitle bool, sql string
 	items := []*Comment{}
 	for rows.Next() {
 		c := &Comment{Replies: []*Comment{}}
-		var chartID, danID *int64
+		var chartID *string
+		var danID *int64
 		var chartTitle *string
 		var danTitle []byte
 		dest := []any{&c.ID, &chartID, &danID, &c.ParentID, &c.Depth, &c.AuthorID, &c.Body, &c.CreatedAt, &c.EditedAt, &c.Deleted, &c.Removed, &c.Score, &c.ReplyCount, &c.MyVote}
@@ -196,7 +199,7 @@ func readComments(ctx context.Context, db rowQuerier, withTitle bool, sql string
 }
 
 // setSubject fills the chart or course fields from their nullable columns.
-func (c *Comment) setSubject(chartID, danID *int64, chartTitle *string, danTitle []byte) {
+func (c *Comment) setSubject(chartID *string, danID *int64, chartTitle *string, danTitle []byte) {
 	if chartID != nil {
 		c.ChartID = *chartID
 	}
@@ -273,7 +276,8 @@ func commentBody(w http.ResponseWriter, raw string) (string, bool) {
 
 type commentState struct {
 	id, authorID   string
-	chartID, danID int64
+	chartID        string
+	danID          int64
 	parentID       *string
 	depth, replies int
 	gone           bool
@@ -290,7 +294,8 @@ const subjectWriteLock = "FOR NO KEY UPDATE"
 // writers and a reply's (chart, then parent comment) always lock in one order.
 func lockComment(w http.ResponseWriter, r *http.Request, tx pgx.Tx, lock string) (commentState, bool) {
 	var c commentState
-	var chartID, danID *int64
+	var chartID *string
+	var danID *int64
 	// A comment never moves to another subject, so this read needs no lock.
 	e := tx.QueryRow(r.Context(), `SELECT chart_id,dan_id FROM comments WHERE id=$1`, r.PathValue("id")).Scan(&chartID, &danID)
 	if e == nil && chartID != nil {
@@ -494,7 +499,8 @@ func (s *Server) createSubjectComment(w http.ResponseWriter, r *http.Request, lo
 		notice.Kind = "dan_comment"
 	}
 	if req.ParentID != nil {
-		var parentChart, parentDan *int64
+		var parentChart *string
+		var parentDan *int64
 		var gone bool
 		// The parent row is updated by the reply counter, so lock it exclusively.
 		e = tx.QueryRow(ctx, `SELECT chart_id,dan_id,author_id,root_id,depth,deleted_at IS NOT NULL OR removed_at IS NOT NULL FROM comments WHERE id=$1 FOR UPDATE`, *req.ParentID).Scan(&parentChart, &parentDan, &notice.Recipient, &root, &depth, &gone)

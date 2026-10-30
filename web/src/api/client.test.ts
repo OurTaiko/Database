@@ -16,7 +16,7 @@ it('requests the endpoint once with cookies, CSRF and cancellation intact', asyn
     ...jsonRequest('PATCH', { description: '更新' }, 'csrf'),
     signal: controller.signal,
   }
-  expect(await api(endpoints.chart(7), request)).toEqual({ id: 7 })
+  expect(await api(endpoints.chart('7'), request)).toEqual({ id: 7 })
   expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/v1/charts/7', {
     credentials: 'include',
     ...request,

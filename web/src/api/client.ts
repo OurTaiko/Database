@@ -35,7 +35,7 @@ export function jsonRequest(method: string, body: unknown, csrf = ''): RequestIn
 }
 /** Reads a new TJA for a chart as its replacement would, storing nothing. audioName is new audio's. */
 export function previewReplacement(
-  chartId: number,
+  chartId: string,
   tja: File,
   audioName: string | undefined,
   csrf: string,
@@ -57,7 +57,7 @@ export function uploadChart(
   key: string,
   signal: AbortSignal,
   onProgress: (n: number) => void,
-  replaceChartId?: number,
+  replaceChartId?: string,
   waitForResult = false,
 ): Promise<Chart | { status: 'processing' }> {
   return new Promise((resolve, reject) => {

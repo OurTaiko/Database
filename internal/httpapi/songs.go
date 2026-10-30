@@ -81,7 +81,7 @@ func (s *Server) createSong(w http.ResponseWriter, r *http.Request, u session, k
 	}
 	if tag.RowsAffected() == 0 {
 		var recorded string
-		var existing *int64
+		var existing *string
 		if e = tx.QueryRow(ctx, `SELECT payload_digest,chart_id FROM upload_requests WHERE user_id=$1 AND idempotency_key=$2`, u.User.ID, key).Scan(&recorded, &existing); e != nil {
 			internal(w, e)
 			return
@@ -108,10 +108,10 @@ func (s *Server) createSong(w http.ResponseWriter, r *http.Request, u session, k
 		coverFile = &id
 	}
 	empty, _ := json.Marshal(map[string]string{})
-	var id int64
-	e = tx.QueryRow(ctx, `INSERT INTO charts(nijiiro_id,official_id,uploader_id,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,0,0,0,$9,$9,$10,15) RETURNING id`,
-		nijiiroID, officialID, u.User.ID, coverFile, description, title, subtitle, bpm, empty, flags).Scan(&id)
+	id := ID()
+	_, e = tx.Exec(ctx, `INSERT INTO charts(id,nijiiro_id,official_id,uploader_id,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end)
+ VALUES($11,$1,$2,$3,$4,$5,$6,$7,$8,0,0,0,$9,$9,$10,15)`,
+		nijiiroID, officialID, u.User.ID, coverFile, description, title, subtitle, bpm, empty, flags, id)
 	if e != nil {
 		internal(w, e)
 		return

@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"slices"
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -270,7 +269,7 @@ func (s *Server) addPlaylistItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	chart, _ := strconv.ParseInt(r.PathValue("chart"), 10, 64)
+	chart := r.PathValue("chart")
 	added, count := false, 0
 	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id int64) (bool, error) {
 		// Holding the chart row FOR SHARE serializes the addition with a deletion.
@@ -317,7 +316,7 @@ func (s *Server) removePlaylistItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	chart, _ := strconv.ParseInt(r.PathValue("chart"), 10, 64)
+	chart := r.PathValue("chart")
 	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id int64) (bool, error) {
 		tag, e := tx.Exec(ctx, `DELETE FROM playlist_items WHERE playlist_id=$1 AND chart_id=$2`, id, chart)
 		if e == nil && tag.RowsAffected() > 0 {
@@ -340,12 +339,12 @@ func (s *Server) orderPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		ChartIDs []int64 `json:"chartIds"`
+		ChartIDs []string `json:"chartIds"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	seen := map[int64]bool{}
+	seen := map[string]bool{}
 	for _, chart := range body.ChartIDs {
 		seen[chart] = true
 	}
@@ -359,7 +358,7 @@ func (s *Server) orderPlaylist(w http.ResponseWriter, r *http.Request) {
 		if e != nil {
 			return false, e
 		}
-		current, e := pgx.CollectRows(rows, pgx.RowTo[int64])
+		current, e := pgx.CollectRows(rows, pgx.RowTo[string])
 		if e != nil {
 			return false, e
 		}
@@ -373,7 +372,7 @@ func (s *Server) orderPlaylist(w http.ResponseWriter, r *http.Request) {
 			problem(w, 409, "PLAYLIST_CHANGED", "歌单内容已变化，请刷新后重试")
 			return false, nil
 		}
-		_, e = tx.Exec(ctx, `UPDATE playlist_items i SET position=listed.ord-1 FROM unnest($2::int8[]) WITH ORDINALITY listed(chart_id,ord)
+		_, e = tx.Exec(ctx, `UPDATE playlist_items i SET position=listed.ord-1 FROM unnest($2::text[]) WITH ORDINALITY listed(chart_id,ord)
  WHERE i.playlist_id=$1 AND i.chart_id=listed.chart_id`, id, order)
 		if e == nil {
 			_, e = tx.Exec(ctx, `UPDATE playlists SET updated_at=now() WHERE id=$1`, id)

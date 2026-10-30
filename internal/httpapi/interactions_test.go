@@ -17,11 +17,11 @@ import (
 type interactionWorld struct {
 	c           testClient
 	s           *Server
-	song, other int64
+	song, other string
 }
 
-func (w interactionWorld) chart(id int64) string {
-	return "/api/v1/charts/" + strconv.FormatInt(id, 10)
+func (w interactionWorld) chart(id string) string {
+	return "/api/v1/charts/" + id
 }
 
 // interactionFixture: owner (with the upload permission) uploaded "Song", two
@@ -37,14 +37,51 @@ func interactionFixture(t *testing.T) interactionWorld {
 	if _, err := pool.Exec(ctx, `UPDATE users SET permission_flags=1 WHERE id=$1`, owner); err != nil {
 		t.Fatal(err)
 	}
-	err := pool.QueryRow(ctx, `INSERT INTO charts(uploader_id,title,bpm,duration,demo_end,created_at) VALUES($1,'Song',120,0,0,now()-interval '2 days') RETURNING id`, owner).Scan(&w.song)
+	err := pool.QueryRow(ctx, `INSERT INTO charts(id,uploader_id,title,bpm,duration,demo_end,created_at) VALUES($2,$1,'Song',120,0,0,now()-interval '2 days') RETURNING id`, owner, ID()).Scan(&w.song)
 	if err == nil {
-		err = pool.QueryRow(ctx, `INSERT INTO charts(uploader_id,title,bpm,duration,demo_end) VALUES($1,'Other',120,0,0) RETURNING id`, owner).Scan(&w.other)
+		err = pool.QueryRow(ctx, `INSERT INTO charts(id,uploader_id,title,bpm,duration,demo_end) VALUES($2,$1,'Other',120,0,0) RETURNING id`, owner, ID()).Scan(&w.other)
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
 	return w
+}
+
+// GET /charts/{id}: by=number finds the chart's number, by=id its ID; without by the form
+// decides (R051).
+func TestChartDetailBy(t *testing.T) {
+	w := interactionFixture(t)
+	var byID Chart
+	if code := w.c.do("", "GET", w.chart(w.song)+"?by=id", "", &byID); code != 200 || byID.ID != w.song || byID.NumberID <= 0 {
+		t.Fatal("by=id", code, byID.ID, byID.NumberID)
+	}
+	number := w.chart(strconv.FormatInt(byID.NumberID, 10))
+	for _, path := range []string{number, number + "?by=number"} {
+		var c Chart
+		if code := w.c.do("", "GET", path, "", &c); code != 200 || c.ID != w.song || c.NumberID != byID.NumberID {
+			t.Fatal("by number", path, code, c.ID)
+		}
+	}
+	for path, want := range map[string]int{
+		w.chart(w.song):                200, // without by, the form tells
+		w.chart(w.song) + "?by=number": 404,
+		number + "?by=id":              404, // a number is not an ID
+		w.chart("0"):                   404,
+		w.chart("01"):                  404,
+		w.chart("99999999"):            404,
+		w.chart(w.song) + "?by=title":  400,
+		w.chart(w.song) + "?by=id&x=1": 200,
+	} {
+		if code := w.c.do("", "GET", path, "", nil); code != want {
+			t.Fatal(path, code, "want", want)
+		}
+	}
+	// A new chart takes the next number.
+	var other Chart
+	w.c.do("", "GET", w.chart(w.other)+"?by=id", "", &other)
+	if other.NumberID != byID.NumberID+1 {
+		t.Fatal("numbers", byID.NumberID, other.NumberID)
+	}
 }
 
 func TestChartVotes(t *testing.T) {
@@ -79,16 +116,16 @@ func TestChartVotes(t *testing.T) {
 		t.Fatalf("withdrawn vote: %+v", v)
 	}
 	var chart Chart
-	c.do("alice", "GET", song, "", &chart)
+	c.do("alice", "GET", song+"?by=id", "", &chart)
 	if chart.Score != 1 || chart.MyVote != 1 || chart.Upvotes != 1 {
 		t.Fatalf("detail: %+v %+v", chart.Score, chart.MyVote)
 	}
-	c.do("", "GET", song, "", &chart)
+	c.do("", "GET", song+"?by=id", "", &chart)
 	if chart.MyVote != 0 || chart.Score != 1 {
 		t.Fatal("guest detail", chart.MyVote)
 	}
 	// "top" puts the voted older chart first; the default order is newest first.
-	for order, first := range map[string]int64{"": w.other, "top": w.song, "hot": w.other, "comments": w.other} {
+	for order, first := range map[string]string{"": w.other, "top": w.song, "hot": w.other, "comments": w.other} {
 		var list struct{ Items []Chart }
 		if code := c.do("", "GET", "/api/v1/charts?order="+order, "", &list); code != 200 || len(list.Items) != 2 || list.Items[0].ID != first {
 			t.Fatal("order", order, code, list.Items)
@@ -168,7 +205,7 @@ func TestCommentThreads(t *testing.T) {
 		t.Fatal("unknown sort", code)
 	}
 	var chart Chart
-	c.do("", "GET", song, "", &chart)
+	c.do("", "GET", song+"?by=id", "", &chart)
 	if chart.CommentCount != 4 {
 		t.Fatal("chart comment count", chart.CommentCount)
 	}
@@ -479,7 +516,7 @@ func TestDanInteractions(t *testing.T) {
 		t.Fatalf("detail: %+v", course)
 	}
 	var top, reply Comment
-	if code := c.do("alice", "POST", path+"/comments", `{"body":"良い段位"}`, &top); code != 201 || top.DanID != danID || top.ChartID != 0 {
+	if code := c.do("alice", "POST", path+"/comments", `{"body":"良い段位"}`, &top); code != 201 || top.DanID != danID || top.ChartID != "" {
 		t.Fatalf("top comment %d %+v", code, top)
 	}
 	if code := c.do("bob", "POST", path+"/comments", `{"body":"同感","parentId":"`+top.ID+`"}`, &reply); code != 201 || reply.Depth != 1 {
@@ -529,7 +566,7 @@ func TestLeaderboard(t *testing.T) {
 	w := interactionFixture(t)
 	c, s := w.c, w.s
 	ctx := context.Background()
-	slot := func(chart int64, course string) int64 {
+	slot := func(chart string, course string) int64 {
 		t.Helper()
 		var id int64
 		if err := s.DB.QueryRow(ctx, `INSERT INTO chart_difficulties(chart_id,course,side,level) VALUES($1,$2,'single',5)

@@ -17,8 +17,10 @@ export type Session = { user: User | null; csrfToken: string }
 export type Category = { id: string; title: string; genre: string; chartCount: number }
 export type CategoryList = { items: Category[]; chartCount: number }
 export type Chart = Metadata & {
-  /** Auto-incremented database ID. */
-  id: number
+  /** 32 lowercase hex digits, as Fanmade's. */
+  id: string
+  /** The chart's short number; GET /charts/{number} finds it too. */
+  numberId: number
   nijiiroId: number | null
   officialId: string | null
   uploaderId: string
@@ -59,7 +61,7 @@ export type CommentSort = 'best' | 'top' | 'new' | 'old' | 'controversial'
 export type Comment = {
   id: string
   /** The chart the comment is on, or (for a 段位 course) the course. */
-  chartId?: number
+  chartId?: string
   chartTitle?: string
   danId?: string
   danTitle?: Record<string, string>
@@ -103,7 +105,7 @@ export type AppNotification = {
   createdAt: string
   read: boolean
   actor: { id: string; nickname: string; avatarUrl?: string } | null
-  chart: { id: number; title: string } | null
+  chart: { id: string; title: string } | null
   dan: { id: string; title: Record<string, string> } | null
   comment: { id: string; parentId: string | null; excerpt: string } | null
   data: {
@@ -139,7 +141,7 @@ export type LeaderboardEntry = {
   submittedAt: string
 }
 export type Leaderboard = {
-  songId: number
+  songId: string
   /** The ranked chart block; `course` and `side` describe it. */
   difficultyId: number
   course: string
@@ -219,7 +221,7 @@ export type DanRewardTitle = {
 export type DanSong = {
   /** The block the course plays: a chart, a course and a side. */
   chart: {
-    id: string | number
+    id: string
     course: 'Easy' | 'Normal' | 'Hard' | 'Oni' | 'Edit'
     side: 'single' | 'p1' | 'p2'
   }

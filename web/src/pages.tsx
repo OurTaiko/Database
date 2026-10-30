@@ -316,7 +316,7 @@ export function Detail() {
     setChosenCourse('')
     setActivityTab('image')
     if (!id) return
-    api<Chart>(endpoints.chart(id), { signal: controller.signal })
+    api<Chart>(endpoints.chartDetail(id), { signal: controller.signal })
       .then(setChart)
       .catch((e) => {
         if (!controller.signal.aborted) setError(e.message)
@@ -414,7 +414,7 @@ export function Detail() {
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">{t('db.databaseId')}</dt>
-              <dd className="text-base font-semibold tabular-nums sm:text-xl">{chart.id}</dd>
+              <dd className="text-base font-semibold tabular-nums sm:text-xl">{chart.numberId}</dd>
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">BPM</dt>
@@ -657,7 +657,7 @@ export function Detail() {
               <dt>{t('db.officialId')}</dt>
               <dd>{chart.officialId ?? t('db.none')}</dd>
               <dt>{t('db.databaseId')}</dt>
-              <dd className="tabular-nums">{chart.id}</dd>
+              <dd className="tabular-nums">{chart.numberId}</dd>
               <dt className="self-center">{t('db.uploader')}</dt>
               <dd className="inline-flex items-center gap-2">
                 <UserAvatar

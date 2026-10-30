@@ -29,7 +29,7 @@ type scoreSubmission struct {
 type Score struct {
 	ID     string `json:"id"`
 	UserID string `json:"userId"`
-	SongID int64  `json:"songId"`
+	SongID string `json:"songId"`
 	// The block that was played; Course and Side describe it.
 	DifficultyID int64  `json:"difficultyId"`
 	Course       string `json:"course"`

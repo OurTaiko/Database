@@ -125,7 +125,7 @@ func TestDifficultyConstants(t *testing.T) {
 	}
 	// The chart page gets every rated route of each block; lists go without.
 	var detail Chart
-	if code := w.c.do("", "GET", w.chart(w.song), "", &detail); code != 200 {
+	if code := w.c.do("", "GET", w.chart(w.song)+"?by=id", "", &detail); code != 200 {
 		t.Fatal("detail", code)
 	}
 	for _, d := range detail.Difficulties {

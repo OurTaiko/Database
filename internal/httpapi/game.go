@@ -240,7 +240,7 @@ func (s *Server) resourceLinks(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if target == "" {
-			target = s.Config.Origin + "/api/v1/charts/" + strconv.FormatInt(c.ID, 10) + "/" + route
+			target = s.Config.Origin + "/api/v1/charts/" + c.ID + "/" + route
 		}
 		return resourceLink{target, target, digest, size, media}, nil
 	}

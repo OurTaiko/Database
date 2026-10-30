@@ -46,7 +46,7 @@ func (s *Server) backfillContentHashes(ctx context.Context, prefix string, const
 	if err != nil {
 		return err
 	}
-	ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (s *Server) backfillContentHashes(ctx context.Context, prefix string, const
 			return ctx.Err()
 		}
 		if err := s.backfillChartHashes(ctx, id); err != nil {
-			log.Printf("content hash backfill for %d failed: %v", id, err)
+			log.Printf("content hash backfill for %s failed: %v", id, err)
 			failures = append(failures, err)
 			continue
 		}
@@ -71,7 +71,7 @@ func (s *Server) backfillContentHashes(ctx context.Context, prefix string, const
 	return errors.Join(failures...)
 }
 
-func (s *Server) backfillChartHashes(parent context.Context, id int64) error {
+func (s *Server) backfillChartHashes(parent context.Context, id string) error {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
 	tx, err := s.DB.Begin(ctx)
@@ -112,7 +112,7 @@ func (s *Server) backfillChartHashes(parent context.Context, id int64) error {
 	}
 	for _, b := range result.Blocks {
 		if b.Error != "" {
-			log.Printf("content hash backfill: chart %d %s/%s cannot be played: %s", id, b.Name, b.Side, b.Error)
+			log.Printf("content hash backfill: chart %s %s/%s cannot be played: %s", id, b.Name, b.Side, b.Error)
 			continue
 		}
 		if b.Hash == "" {

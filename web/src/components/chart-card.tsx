@@ -37,7 +37,10 @@ export function ChartCard({ chart }: { chart: Chart }) {
       to={`/charts/${chart.id}`}
     >
       {/* Fixed height: five difficulty bookmarks, the most a song has, fit exactly. */}
-      <Card size="sm" className="isolate relative group-hover:shadow-drop-hover pt-6 pb-5 h-56 transition-shadow">
+      <Card
+        size="sm"
+        className="isolate relative group-hover:shadow-drop-hover pt-6 pb-5 h-56 transition-shadow"
+      >
         <div
           aria-hidden="true"
           className="top-0 z-10 absolute inset-x-0 border-b-2 border-outline h-1.5"
@@ -93,7 +96,7 @@ export function ChartCard({ chart }: { chart: Chart }) {
               <li>
                 {chart.nijiiroId === null ? (
                   <Badge variant="outline" className="text-muted-foreground tabular-nums">
-                    #{chart.id}
+                    #{chart.numberId}
                   </Badge>
                 ) : (
                   <Badge

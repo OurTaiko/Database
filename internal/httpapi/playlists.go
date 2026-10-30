@@ -264,7 +264,7 @@ func (s *Server) myPlaylists(w http.ResponseWriter, r *http.Request) {
  WHERE mine.user_id=$1 AND p.is_public ORDER BY mine.favorited_at DESC,p.id`, u.User.ID)
 	}
 	if raw := r.URL.Query().Get("chart"); e == nil && raw != "" {
-		chart, _ := strconv.ParseInt(raw, 10, 64)
+		chart := raw
 		var rows pgx.Rows
 		if rows, e = tx.Query(ctx, `SELECT i.playlist_id::text FROM playlist_items i JOIN playlists p ON p.id=i.playlist_id WHERE p.owner_id=$1 AND i.chart_id=$2`, u.User.ID, chart); e == nil {
 			var containing []string
@@ -288,8 +288,8 @@ func (s *Server) myPlaylists(w http.ResponseWriter, r *http.Request) {
 }
 
 // playlistCharts reads published charts in the order of ids.
-func (s *Server) playlistCharts(ctx context.Context, ids []int64) ([]Chart, error) {
-	rows, e := s.DB.Query(ctx, chartSelect+` JOIN unnest($1::int8[]) WITH ORDINALITY listed(id,ord) ON listed.id=c.id WHERE `+publishedChart+` ORDER BY listed.ord`, ids)
+func (s *Server) playlistCharts(ctx context.Context, ids []string) ([]Chart, error) {
+	rows, e := s.DB.Query(ctx, chartSelect+` JOIN unnest($1::text[]) WITH ORDINALITY listed(id,ord) ON listed.id=c.id WHERE `+publishedChart+` ORDER BY listed.ord`, ids)
 	if e != nil {
 		return nil, e
 	}
@@ -303,7 +303,7 @@ func (s *Server) playlistCharts(ctx context.Context, ids []int64) ([]Chart, erro
 
 // storedPlaylistSongs reads a playlist the requester may see and its chart
 // IDs in order. It reports false after writing the error response.
-func (s *Server) storedPlaylistSongs(w http.ResponseWriter, r *http.Request, raw string) (Playlist, []int64, bool) {
+func (s *Server) storedPlaylistSongs(w http.ResponseWriter, r *http.Request, raw string) (Playlist, []string, bool) {
 	ctx := r.Context()
 	id, ok := playlistID(raw)
 	p, e := Playlist{}, pgx.ErrNoRows
@@ -325,11 +325,11 @@ func (s *Server) storedPlaylistSongs(w http.ResponseWriter, r *http.Request, raw
 		problem(w, 404, "PLAYLIST_NOT_FOUND", "歌单不存在或未公开")
 		return p, nil, false
 	}
-	var ids []int64
+	var ids []string
 	if e == nil {
 		var rows pgx.Rows
 		if rows, e = s.DB.Query(ctx, `SELECT chart_id FROM playlist_items WHERE playlist_id=$1 ORDER BY position,added_at,chart_id`, id); e == nil {
-			ids, e = pgx.CollectRows(rows, pgx.RowTo[int64])
+			ids, e = pgx.CollectRows(rows, pgx.RowTo[string])
 		}
 	}
 	if e != nil {
@@ -341,7 +341,7 @@ func (s *Server) storedPlaylistSongs(w http.ResponseWriter, r *http.Request, raw
 
 func (s *Server) playlistDetail(w http.ResponseWriter, r *http.Request) {
 	var p Playlist
-	var ids []int64
+	var ids []string
 	if system := systemPlaylistByID(r.PathValue("id")); system != nil {
 		var e error
 		if ids, e = system.chartIDs(r.Context(), s.DB); e != nil {

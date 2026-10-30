@@ -20,7 +20,7 @@ type GamePlaylist struct {
 	Owner   string `json:"owner"`
 	// Cover is the folder's JPEG at its CDN address; left out without one.
 	Cover    *resourceLink `json:"cover,omitempty"`
-	ChartIDs []int64       `json:"chartIds"`
+	ChartIDs []string      `json:"chartIds"`
 	// The stored game cover, resolved to Cover after the snapshot.
 	coverKey, coverHash string
 	coverSize           int64

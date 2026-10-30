@@ -22,7 +22,7 @@ import (
 // passed. Decoding, transcoding and storing happen after the request returns.
 type uploadJob struct {
 	user, key, dir           string
-	existingID               int64  // set when replacing a chart's files
+	existingID               string // set when replacing a chart's files
 	audioHash, movieHash     string // files of that chart the upload keeps
 	tja, audio, cover, movie *stagedFile
 	normalized               []byte
@@ -95,7 +95,7 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 	af := j.audio
 	var current Chart
 	duration := 0.0
-	if j.existingID != 0 {
+	if j.existingID != "" {
 		var err error
 		current, err = s.chart(ctx, j.existingID)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -186,7 +186,7 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 	}
 	defer tx.Rollback(context.Background())
 	var previousTJA, previousAudio, previousCover, previousMovie *int64
-	if j.existingID != 0 {
+	if j.existingID != "" {
 		// Serialize with other replacements, deletion and score submissions, and confirm the
 		// kept files once more now that nothing can change them.
 		var audioSHA, movieHash string
@@ -236,7 +236,7 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 	titles, _ := json.Marshal(j.meta.TitleTranslations)
 	subtitles, _ := json.Marshal(j.meta.SubtitleTranslations)
 	id := j.existingID
-	if id != 0 {
+	if id != "" {
 		// Names and their translations come from the new TJA again, as on Fanmade, unless
 		// keepTitles keeps the chart's own.
 		_, err = tx.Exec(ctx, `UPDATE charts SET tja_file=$2,audio_file=$3,cover_file=$4,description=$5,category_flags=$6,nijiiro_id=$7,official_id=$8,
@@ -246,9 +246,10 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 			id, tjaFile, audioFile, coverFile, j.description, j.flags, j.nijiiroID, j.officialID,
 			j.meta.Title, j.meta.Subtitle, j.meta.BPM, j.meta.Offset, demoStart, demoEnd, duration, titles, subtitles, j.keepTitles, movieFile, j.meta.MovieOffset)
 	} else {
-		err = tx.QueryRow(ctx, `INSERT INTO charts(nijiiro_id,official_id,uploader_id,tja_file,audio_file,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end,movie_file,movie_offset)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
-			j.nijiiroID, j.officialID, j.user, tjaFile, audioFile, coverFile, j.description, j.meta.Title, j.meta.Subtitle, j.meta.BPM, j.meta.Offset, demoStart, duration, titles, subtitles, j.flags, demoEnd, movieFile, j.meta.MovieOffset).Scan(&id)
+		id = ID()
+		_, err = tx.Exec(ctx, `INSERT INTO charts(id,nijiiro_id,official_id,uploader_id,tja_file,audio_file,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end,movie_file,movie_offset)
+ VALUES($20,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+			j.nijiiroID, j.officialID, j.user, tjaFile, audioFile, coverFile, j.description, j.meta.Title, j.meta.Subtitle, j.meta.BPM, j.meta.Offset, demoStart, duration, titles, subtitles, j.flags, demoEnd, movieFile, j.meta.MovieOffset, id)
 	}
 	if err != nil {
 		return failed(err)
@@ -280,7 +281,7 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 		log.Printf("replaced chart file cleanup pending: %v", err)
 	}
 	// The game's preview clip follows a new audio or range.
-	if j.existingID == 0 || af != nil || demoStart != current.DemoStart || demoEnd != current.DemoEnd {
+	if j.existingID == "" || af != nil || demoStart != current.DemoStart || demoEnd != current.DemoEnd {
 		source := ""
 		if af != nil {
 			source = af.path
@@ -302,7 +303,7 @@ func (s *Server) finishUpload(j *uploadJob, result uploadResult) {
 	defer cancel()
 	data := map[string]any{"title": j.meta.Title, "status": "published"}
 	chartID := result.chart.ID
-	if j.existingID != 0 {
+	if j.existingID != "" {
 		data["status"] = "updated"
 	}
 	if result.err != nil {
@@ -327,13 +328,12 @@ func (s *Server) finishUpload(j *uploadJob, result uploadResult) {
 // FailInterruptedUploads runs once at startup. Staged files do not survive a restart, so
 // uploads that were still being processed are reported as failed.
 func (s *Server) FailInterruptedUploads(ctx context.Context) error {
-	rows, err := s.DB.Query(ctx, `DELETE FROM upload_requests WHERE status='processing' RETURNING user_id,idempotency_key,title,COALESCE(chart_id,0)`)
+	rows, err := s.DB.Query(ctx, `DELETE FROM upload_requests WHERE status='processing' RETURNING user_id,idempotency_key,title,COALESCE(chart_id,'')`)
 	if err != nil {
 		return err
 	}
 	type interrupted struct {
-		user, key, title string
-		chart            int64
+		user, key, title, chart string
 	}
 	items, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (v interrupted, e error) {
 		e = row.Scan(&v.user, &v.key, &v.title, &v.chart)
@@ -369,7 +369,7 @@ func (s *Server) acceptUpload(w http.ResponseWriter, r *http.Request, j *uploadJ
 		return false
 	}
 	defer tx.Rollback(ctx)
-	var chartID *int64
+	var chartID *string
 	if existing != nil {
 		chartID = &existing.ID
 	}
@@ -381,7 +381,7 @@ func (s *Server) acceptUpload(w http.ResponseWriter, r *http.Request, j *uploadJ
 	}
 	if tag.RowsAffected() == 0 {
 		var recorded, status, tjaSHA, audioSHA string
-		var recordedChart *int64
+		var recordedChart *string
 		if err = tx.QueryRow(ctx, `SELECT payload_digest,status,chart_id,tja_sha256,audio_sha256 FROM upload_requests WHERE user_id=$1 AND idempotency_key=$2`, j.user, j.key).Scan(&recorded, &status, &recordedChart, &tjaSHA, &audioSHA); err != nil {
 			internal(w, err)
 			return false

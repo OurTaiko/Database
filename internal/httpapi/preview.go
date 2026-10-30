@@ -22,7 +22,7 @@ import (
 // false a chart that has a clip is left alone (the backfill). It runs after the change
 // that calls for it has committed, under the chart's row lock, so the range and audio it
 // reads are current; a failure leaves the chart without a clip, which the backfill retries.
-func (s *Server) refreshPreview(parent context.Context, id int64, source string, force bool) (err error) {
+func (s *Server) refreshPreview(parent context.Context, id string, source string, force bool) (err error) {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
 	tx, err := s.DB.Begin(ctx)
@@ -107,20 +107,20 @@ func (s *Server) fetch(ctx context.Context, key, sha string, size int64, path st
 
 // previewAfter refreshes a chart's clip after a request changed its audio or range. The
 // change itself stands either way; a failure is logged and left to the backfill.
-func (s *Server) previewAfter(ctx context.Context, id int64, source string) {
+func (s *Server) previewAfter(ctx context.Context, id string, source string) {
 	if err := s.refreshPreview(context.WithoutCancel(ctx), id, source, true); err != nil {
-		log.Printf("preview clip for chart %d pending: %v", id, err)
+		log.Printf("preview clip for chart %s pending: %v", id, err)
 	}
 }
 
 // BackfillPreviews cuts the clip of every published chart with files that has none,
 // oldest first; a failure is logged and retried on the next pass.
 func (s *Server) BackfillPreviews(ctx context.Context) error {
-	rows, err := s.DB.Query(ctx, `SELECT c.id FROM charts c WHERE `+publishedChart+` AND c.audio_file IS NOT NULL AND c.preview_file IS NULL ORDER BY c.id`)
+	rows, err := s.DB.Query(ctx, `SELECT c.id FROM charts c WHERE `+publishedChart+` AND c.audio_file IS NOT NULL AND c.preview_file IS NULL ORDER BY c.created_at,c.id`)
 	if err != nil {
 		return err
 	}
-	ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (s *Server) BackfillPreviews(ctx context.Context) error {
 		}
 		if err := s.refreshPreview(ctx, id, "", false); err != nil {
 			failed++
-			log.Printf("preview clip for chart %d failed: %v", id, err)
+			log.Printf("preview clip for chart %s failed: %v", id, err)
 		}
 	}
 	if len(ids) > 0 {
