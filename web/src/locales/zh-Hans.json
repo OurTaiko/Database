@@ -493,7 +493,6 @@
     "hasDouble": "含 1P／2P 分侧谱面",
     "hasBranching": "含分歧谱面",
     "record": "数据库记录",
-    "uploader": "上传者",
     "created": "收录时间",
     "updated": "最近更改",
     "files": "文件",
@@ -879,8 +878,28 @@
     }
   },
   "collaboration": {
-    "owner": "上传者",
-    "ownerBadgeTitle": "这首谱面的上传者"
+    "add": "添加共同创作",
+    "description": "对方同意后，将成为谱面的所有者之一，拥有编辑信息、替换文件、更换封面、删除谱面和邀请共同创作者的权限。",
+    "search": "搜索用户昵称",
+    "invite": "发送邀请",
+    "sent": "邀请已发送，请等待对方在通知中同意。",
+    "owner": "所有者",
+    "owners": "所有者",
+    "pending": "等待同意",
+    "noUsers": "没有找到用户",
+    "notice": "{{actor}} 邀请你成为《{{chart}}》的共同创作者",
+    "permissions": "同意后，你将拥有该谱面的完整管理权限。",
+    "accept": "同意",
+    "decline": "拒绝",
+    "accepted": "已同意，你已成为所有者之一。",
+    "declined": "已拒绝",
+    "ownerBadgeTitle": "这首谱面的所有者",
+    "leave": "放弃所有权",
+    "leaveTitle": "放弃这首谱面的所有权？",
+    "leaveDescription": "你将不再是所有者，无法再编辑、替换文件或删除这首谱面，其他所有者不受影响。之后需要现有所有者重新邀请才能恢复。",
+    "leaveConfirm": "确认放弃",
+    "leavingNow": "正在处理…",
+    "left": "你已不再是这首谱面的所有者。"
   },
   "constants": {
     "title": "难度定数",

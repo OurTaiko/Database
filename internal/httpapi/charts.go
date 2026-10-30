@@ -6,13 +6,13 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"ourtaiko.dev/database/api/internal/constants"
-	"ourtaiko.dev/database/api/internal/database"
 	"ourtaiko.dev/database/api/internal/tja"
 )
 
@@ -21,10 +21,13 @@ type Chart struct {
 	// NumberID is the chart's short number, also accepted by GET /charts/{id} (R051).
 	NumberID int64 `json:"numberId"`
 	// NijiiroID and OfficialID are null when unknown.
-	NijiiroID  *int32  `json:"nijiiroId"`
-	OfficialID *string `json:"officialId"`
-	UploaderID string  `json:"uploaderId"`
-	Uploader   string  `json:"uploader"`
+	NijiiroID  *int32              `json:"nijiiroId"`
+	OfficialID *string             `json:"officialId"`
+	OwnerIDs   []string            `json:"ownerIds"`
+	Owners     []NotificationActor `json:"owners"`
+	// Deprecated: original uploader only; authorization uses OwnerIDs.
+	OwnerID  string `json:"ownerId"`
+	Uploader string `json:"uploader"`
 	// UploaderAvatarURL is empty when the uploader has no avatar or SSO is unavailable.
 	UploaderAvatarURL string `json:"uploaderAvatarUrl"`
 	Description       string `json:"description"`
@@ -70,7 +73,7 @@ const chartScoreSQL = `COALESCE((SELECT upvotes-downvotes FROM chart_stats WHERE
 
 const playableChart = publishedChart + ` AND c.tja_file IS NOT NULL`
 
-const chartSelect = `SELECT c.id,c.number_id,c.nijiiro_id,c.official_id,c.uploader_id,c.description,c.created_at,c.update_at,c.duration,c.demo_end,c.category_flags,
+const chartSelect = `SELECT c.id,c.number_id,c.nijiiro_id,c.official_id,c.owner_ids,c.description,c.created_at,c.update_at,c.duration,c.demo_end,c.category_flags,
  COALESCE(tf.original_filename,''),COALESCE(af.original_filename,''),COALESCE(tf.sha256,''),COALESCE(tf.byte_size,0),COALESCE(af.sha256,''),COALESCE(af.byte_size,0),COALESCE(tf.storage_key,''),COALESCE(af.storage_key,''),COALESCE(cf.sha256,''),COALESCE(cf.storage_key,''),
  c.title,c.subtitle,c.bpm,c.offset_seconds,c.demo_start,COALESCE(af.sha256||'.'||af.extension,''),c.title_translations,c.subtitle_translations,
  (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',d.id,'course',d.course,'side',d.side,'level',d.level,'maker',d.maker,'branching',d.branching,'chartHash',d.content_hash)
@@ -85,11 +88,12 @@ func readChart(row pgx.Row) (Chart, error) {
 	var c Chart
 	var difficulties []byte
 	var flags CategoryFlags
-	e := row.Scan(&c.ID, &c.NumberID, &c.NijiiroID, &c.OfficialID, &c.UploaderID, &c.Description, &c.CreatedAt, &c.UpdateAt, &c.Duration, &c.DemoEnd, &flags,
+	e := row.Scan(&c.ID, &c.NumberID, &c.NijiiroID, &c.OfficialID, &c.OwnerIDs, &c.Description, &c.CreatedAt, &c.UpdateAt, &c.Duration, &c.DemoEnd, &flags,
 		&c.TJAName, &c.AudioName, &c.TJAHash, &c.TJASize, &c.AudioHash, &c.AudioSize, &c.TJAKey, &c.AudioKey, &c.CoverHash, &c.CoverKey,
 		&c.Title, &c.Subtitle, &c.BPM, &c.Offset, &c.DemoStart, &c.Wave, &c.TitleTranslations, &c.SubtitleTranslations, &difficulties,
 		&c.Upvotes, &c.Downvotes, &c.CommentCount, &c.MovieOffset, &c.MovieHash, &c.MovieSize, &c.MovieKey)
 	if e == nil {
+		c.OwnerID = c.OwnerIDs[0]
 		c.Score = c.Upvotes - c.Downvotes
 		c.HasFiles = c.TJAKey != ""
 		c.CategoryIDs = flags.IDs()
@@ -169,33 +173,39 @@ func (s *Server) chartWhere(ctx context.Context, column string, value any) (Char
 func (s *Server) chartNames(ctx context.Context, charts []Chart) {
 	ids, seen := []string{}, map[string]bool{}
 	for _, c := range charts {
-		if c.UploaderID != database.SystemUploaderID && !seen[c.UploaderID] {
-			seen[c.UploaderID] = true
-			ids = append(ids, c.UploaderID)
-		}
-	}
-	profiles := map[string]PublicProfile{}
-	if s.Config.SSO != nil && len(ids) > 0 {
-		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		defer cancel()
-		if found, e := s.Config.SSO.Profiles(ctx, ids); e == nil {
-			profiles = found
-		}
-	}
-	for i := range charts {
-		switch id := charts[i].UploaderID; {
-		case id == database.SystemUploaderID:
-			charts[i].Uploader = "ESE (TJADB)"
-		case s.Config.SSO == nil && id == s.Config.DevUserID:
-			charts[i].Uploader = devUser(id).Nickname
-		default:
-			p, ok := profiles[id]
-			if !ok {
-				p.Nickname = "未知用户"
+		for _, id := range c.OwnerIDs {
+			if !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
 			}
-			charts[i].Uploader, charts[i].UploaderAvatarURL = p.Nickname, p.AvatarURL
 		}
 	}
+	profiles := s.profiles(ctx, ids)
+	for i := range charts {
+		charts[i].setOwners(profiles)
+	}
+}
+
+func (c *Chart) setUploader(p PublicProfile) {
+	c.Uploader = p.Nickname
+	c.UploaderAvatarURL = p.AvatarURL
+}
+
+func (c *Chart) hasOwner(id string) bool { return slices.Contains(c.OwnerIDs, id) }
+func (c *Chart) setOwners(profiles map[string]PublicProfile) {
+	c.Owners = []NotificationActor{}
+	for _, id := range c.OwnerIDs {
+		p, ok := profiles[id]
+		if !ok {
+			p.Nickname = "未知用户"
+		}
+		c.Owners = append(c.Owners, NotificationActor{ID: id, Nickname: p.Nickname, AvatarURL: p.AvatarURL})
+	}
+	p, ok := profiles[c.OwnerID]
+	if !ok {
+		p.Nickname = "未知用户"
+	}
+	c.setUploader(p)
 }
 
 const pageSize = 24
@@ -221,12 +231,12 @@ func keywordNumber(q string) int64 {
 }
 
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
-	uploader := r.URL.Query().Get("uploader")
-	if uploader != "" && !validSubject(uploader) {
+	owner := r.URL.Query().Get("owner")
+	if owner != "" && !validSubject(owner) {
 		problem(w, 400, "QUERY_INVALID", "用户标识无效")
 		return
 	}
-	s.search(w, r, uploader)
+	s.search(w, r, owner)
 }
 func (s *Server) mine(w http.ResponseWriter, r *http.Request) {
 	u, ok := s.required(w, r, false)
@@ -236,10 +246,10 @@ func (s *Server) mine(w http.ResponseWriter, r *http.Request) {
 	s.search(w, r, u.User.ID)
 }
 
-// search pages the chart list. Filters: keyword, uploader, category, a
+// search pages the chart list. Filters: keyword, owner, category, a
 // course and star level that must hold for the same block (any side),
 // whether the chart has a Nijiiro ID, and whether it has files.
-func (s *Server) search(w http.ResponseWriter, r *http.Request, uploader string) {
+func (s *Server) search(w http.ResponseWriter, r *http.Request, owner string) {
 	query := r.URL.Query()
 	q := strings.TrimSpace(query.Get("q"))
 	if len(q) > 200 {
@@ -316,13 +326,13 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, uploader string)
 	}
 	number := keywordNumber(q)
 	where := ` WHERE ` + publishedChart + ` AND ` + keywordClause("$1", "$7") + `
- AND ($2='' OR c.uploader_id=$2)
+ AND ($2='' OR c.owner_ids @> ARRAY[$2::text])
  AND ($3::int=0 OR (c.category_flags & $3::int)<>0)
  AND (($4='' AND $5::int=0) OR EXISTS(SELECT 1 FROM chart_difficulties d
    WHERE d.chart_id=c.id AND ($4='' OR d.course=$4) AND ($5::int=0 OR d.level=$5)))
  AND ($6='' OR (c.nijiiro_id IS NOT NULL)=($6='yes'))
  AND ($8='' OR (c.tja_file IS NOT NULL)=($8='yes'))`
-	args := []any{q, uploader, int(flag), course, level, mapped, number, files}
+	args := []any{q, owner, int(flag), course, level, mapped, number, files}
 	var total int
 	if e := s.DB.QueryRow(r.Context(), `SELECT count(*) FROM charts c`+where, args...).Scan(&total); e != nil {
 		internal(w, e)
@@ -404,9 +414,9 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, c)
 }
 
-// canManage: the uploader while holding the upload permission, or an administrator.
+// canManage: an owner while holding the upload permission, or an administrator.
 func canManage(u User, c Chart) bool {
-	return u.IsAdmin || (u.CanUpload && u.ID == c.UploaderID)
+	return u.IsAdmin || (u.CanUpload && c.hasOwner(u.ID))
 }
 
 func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
@@ -428,7 +438,7 @@ func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canManage(u.User, c) {
-		problem(w, 403, "FORBIDDEN", "只有上传者或管理员可以删除谱面")
+		problem(w, 403, "FORBIDDEN", "只有所有者或管理员可以删除谱面")
 		return
 	}
 	files, e := s.deleteChart(r.Context(), id)

@@ -247,8 +247,8 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 			j.meta.Title, j.meta.Subtitle, j.meta.BPM, j.meta.Offset, demoStart, demoEnd, duration, titles, subtitles, j.keepTitles, movieFile, j.meta.MovieOffset)
 	} else {
 		id = ID()
-		_, err = tx.Exec(ctx, `INSERT INTO charts(id,nijiiro_id,official_id,uploader_id,tja_file,audio_file,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end,movie_file,movie_offset)
- VALUES($20,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+		_, err = tx.Exec(ctx, `INSERT INTO charts(id,nijiiro_id,official_id,owner_ids,tja_file,audio_file,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end,movie_file,movie_offset)
+ VALUES($20,$1,$2,ARRAY[$3::text],$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
 			j.nijiiroID, j.officialID, j.user, tjaFile, audioFile, coverFile, j.description, j.meta.Title, j.meta.Subtitle, j.meta.BPM, j.meta.Offset, demoStart, duration, titles, subtitles, j.flags, demoEnd, movieFile, j.meta.MovieOffset, id)
 	}
 	if err != nil {

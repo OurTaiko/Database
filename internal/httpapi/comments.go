@@ -68,7 +68,7 @@ const publishedSubject = `((m.chart_id IS NOT NULL AND ` + publishedChart + `) O
 type commentSubject struct {
 	chartID, danID string
 	// Who is told about new top-level comments and upvote milestones.
-	owner        string
+	owners       []string
 	commentCount int
 }
 
@@ -99,8 +99,8 @@ func chartSubject(w http.ResponseWriter, r *http.Request, db rowScanner, lock st
 	id := r.PathValue("id")
 	var e error = pgx.ErrNoRows
 	if validID(id) {
-		e = db.QueryRow(r.Context(), `SELECT c.id,c.uploader_id,COALESCE((SELECT comment_count FROM chart_stats WHERE chart_id=c.id),0)
-		 FROM charts c WHERE c.id=$1 AND `+publishedChart+` `+lock, id).Scan(&t.chartID, &t.owner, &t.commentCount)
+		e = db.QueryRow(r.Context(), `SELECT c.id,c.owner_ids,COALESCE((SELECT comment_count FROM chart_stats WHERE chart_id=c.id),0)
+		 FROM charts c WHERE c.id=$1 AND `+publishedChart+` `+lock, id).Scan(&t.chartID, &t.owners, &t.commentCount)
 	}
 	if errors.Is(e, pgx.ErrNoRows) {
 		problem(w, 404, "CHART_NOT_FOUND", "谱面不存在或已删除")
@@ -118,7 +118,9 @@ func danSubject(w http.ResponseWriter, r *http.Request, db rowScanner, lock stri
 	id := r.PathValue("id")
 	var e error = pgx.ErrNoRows
 	if validID(id) {
-		e = db.QueryRow(r.Context(), `SELECT d.id,d.owner_id,d.comment_count FROM dan_courses d WHERE d.id=$1 AND d.status='published' `+lock, id).Scan(&t.danID, &t.owner, &t.commentCount)
+		var owner string
+		e = db.QueryRow(r.Context(), `SELECT d.id,d.owner_id,d.comment_count FROM dan_courses d WHERE d.id=$1 AND d.status='published' `+lock, id).Scan(&t.danID, &owner, &t.commentCount)
+		t.owners = []string{owner}
 	}
 	if errors.Is(e, pgx.ErrNoRows) {
 		problem(w, 404, "DAN_NOT_FOUND", "段位不存在")
@@ -489,8 +491,8 @@ func (s *Server) createSubjectComment(w http.ResponseWriter, r *http.Request, lo
 		return
 	}
 	id, depth, root := ID(), 0, ""
-	// Top-level comments notify the chart's uploader or the course's maker, replies the parent's author.
-	notice := Notice{Recipient: subject.owner, Kind: "chart_comment", Actor: u.User.ID, ChartID: subject.chartID, DanID: subject.danID, CommentID: id}
+	// Top-level comments notify the chart's owners or the course's maker, replies the parent's author.
+	notice := Notice{Kind: "chart_comment", Actor: u.User.ID, ChartID: subject.chartID, DanID: subject.danID, CommentID: id}
 	if subject.danID != "" {
 		notice.Kind = "dan_comment"
 	}
@@ -531,7 +533,17 @@ func (s *Server) createSubjectComment(w http.ResponseWriter, r *http.Request, lo
 		internal(w, e)
 		return
 	}
-	if e = notify(ctx, tx, notice); e != nil {
+	if req.ParentID == nil {
+		for _, owner := range subject.owners {
+			notice.Recipient = owner
+			if e = notify(ctx, tx, notice); e != nil {
+				break
+			}
+		}
+	} else {
+		e = notify(ctx, tx, notice)
+	}
+	if e != nil {
 		internal(w, e)
 		return
 	}

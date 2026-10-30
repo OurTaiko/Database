@@ -1,3 +1,4 @@
+import { isChartOwner } from './chart-owners'
 import { useTranslation } from 'react-i18next'
 import { chartText } from '@/chart-language'
 import { i18n } from '@/i18n'
@@ -88,7 +89,7 @@ export function UpdatePage() {
   // The API decides; this only hides a form that would be refused.
   const canManage =
     !!session.user &&
-    (session.user.isAdmin || (session.user.canUpload && session.user.id === chart.uploaderId))
+    (session.user.isAdmin || (session.user.canUpload && isChartOwner(chart, session.user.id)))
   if (!canManage) return <p>{t('messages.onlyTheUploaderOrAnAdministratorCanUpdateThisSong')}</p>
   return (
     <UploadPage

@@ -23,7 +23,10 @@ export type Chart = Metadata & {
   numberId: number
   nijiiroId: number | null
   officialId: string | null
-  uploaderId: string
+  ownerIds?: string[]
+  owners?: { id: string; nickname: string; avatarUrl?: string }[]
+  /** Original uploader; use ownerIds for ownership. */
+  ownerId: string
   uploader: string
   uploaderAvatarUrl?: string
   description: string

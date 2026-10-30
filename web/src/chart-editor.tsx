@@ -1,3 +1,4 @@
+import { isChartOwner } from './chart-owners'
 import { chartText } from '@/chart-language'
 import { i18n } from '@/i18n'
 import { useTranslation } from 'react-i18next'
@@ -273,7 +274,7 @@ export function ChartEditorPage() {
     return <p className="text-sm text-muted-foreground">{t('editor.loading')}</p>
   const canManage =
     !!session.user &&
-    (session.user.isAdmin || (session.user.canUpload && session.user.id === chart.uploaderId))
+    (session.user.isAdmin || (session.user.canUpload && isChartOwner(chart, session.user.id)))
   if (!canManage) return <Notice>{t('editor.onlyManagers')}</Notice>
   const title = chartText(chart, i18n.resolvedLanguage).title
   const lines = text.length ? text.split(/\r\n|\r|\n/).length : 0

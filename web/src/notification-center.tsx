@@ -11,12 +11,12 @@ import {
   CheckIcon,
   EnvelopeSimpleIcon,
   ShieldWarningIcon,
-  XIcon,
   UploadSimpleIcon,
+  XIcon,
 } from '@phosphor-icons/react'
 import { api, jsonRequest } from '@/api/client'
-import { errorCodeMessage } from '@/api/error-message'
 import { endpoints } from '@/api/endpoints'
+import { errorCodeMessage } from '@/api/error-message'
 import type { AppNotification, NotificationPage, NotificationSetting } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -49,6 +49,8 @@ function useNotificationText() {
     const chart = n.chart?.title ?? (n.dan ? danTitle(n.dan.title, i18n.resolvedLanguage) : '')
     const count = n.data.upvotes ?? 0
     switch (n.kind) {
+      case 'chart_collaboration':
+        return t('collaboration.notice', { actor, chart })
       case 'comment_reply':
         return t('notificationCenter.text.comment_reply', { actor, chart })
       case 'chart_comment':
@@ -63,6 +65,8 @@ function useNotificationText() {
         return t('notificationCenter.text.comment_upvotes', { chart, count })
       case 'comment_removed':
         return t('notificationCenter.text.comment_removed', { chart })
+      case 'playlist_removed':
+        return t('notificationCenter.text.playlist_removed', { name: n.data.name ?? '' })
       case 'upload_result': {
         const title = n.data.title || chart
         if (n.data.status === 'failed')
@@ -91,8 +95,6 @@ function useNotificationText() {
           { title, files: new Intl.ListFormat(i18n.resolvedLanguage).format(skipped) },
         )
       }
-      case 'playlist_removed':
-        return t('notificationCenter.text.playlist_removed', { name: n.data.name ?? '' })
       default:
         return t('notificationCenter.text.unknown')
     }
@@ -100,6 +102,7 @@ function useNotificationText() {
 }
 
 function target(n: AppNotification) {
+  if (n.kind === 'chart_collaboration' && n.data.status === 'pending') return '/notifications'
   if (n.chart && n.comment) return commentPath(n.chart.id, n.comment.id)
   if (n.chart) return `/charts/${encodeURIComponent(n.chart.id)}`
   if (n.dan && n.comment) return danCommentPath(n.dan.id, n.comment.id)
@@ -383,6 +386,7 @@ export function NotificationsPage() {
   const [data, setData] = useState<NotificationPage | null>(null)
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
+  const [responding, setResponding] = useState<string | null>(null)
   useEffect(() => {
     if (!user) return
     const controller = new AbortController()
@@ -421,15 +425,23 @@ export function NotificationsPage() {
       notify((e as Error).message, 'error')
     }
   }
+  const respond = async (n: AppNotification, accept: boolean) => {
+    setResponding(n.id)
+    try {
+      await run(
+        api(endpoints.respondCollaboration(n.id), jsonRequest('POST', { accept }, csrfToken)),
+      )
+    } finally {
+      setResponding(null)
+    }
+  }
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
   return (
     <section className="mx-auto grid max-w-5xl items-start gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
       <div className="min-w-0 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-3xl font-extrabold">
-              {t('notificationCenter.title')}
-            </h1>
+            <h1 className="text-3xl font-extrabold">{t('notificationCenter.title')}</h1>
             {data && (
               <p className="text-sm text-muted-foreground">
                 {t('notificationCenter.unreadCount', { count: data.unread })}
@@ -497,10 +509,7 @@ export function NotificationsPage() {
               return (
                 <li
                   key={n.id}
-                  className={cn(
-                    'flex flex-wrap items-start gap-3 p-4',
-                    !n.read && 'bg-link/5',
-                  )}
+                  className={cn('flex flex-wrap items-start gap-3 p-4', !n.read && 'bg-link/5')}
                 >
                   <UnreadDot read={n.read} />
                   <button
@@ -516,6 +525,41 @@ export function NotificationsPage() {
                     <NotificationIcon n={n} />
                     <NotificationContent n={n} />
                   </button>
+                  {n.kind === 'chart_collaboration' && (
+                    <div
+                      className="order-last flex w-full flex-wrap items-center gap-2 pl-5 text-sm"
+                      role="status"
+                    >
+                      {n.data.status === 'pending' ? (
+                        <>
+                          <p className="w-full text-muted-foreground">
+                            {t('collaboration.permissions')}
+                          </p>
+                          <Button
+                            size="sm"
+                            disabled={responding !== null}
+                            onClick={() => void respond(n, true)}
+                          >
+                            {t('collaboration.accept')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={responding !== null}
+                            onClick={() => void respond(n, false)}
+                          >
+                            {t('collaboration.decline')}
+                          </Button>
+                        </>
+                      ) : (
+                        t(
+                          n.data.status === 'accepted'
+                            ? 'collaboration.accepted'
+                            : 'collaboration.declined',
+                        )
+                      )}
+                    </div>
+                  )}
                   <div className="flex shrink-0 gap-1">
                     <Button
                       variant="ghost"
@@ -544,6 +588,7 @@ export function NotificationsPage() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
+                      disabled={n.kind === 'chart_collaboration' && n.data.status === 'pending'}
                       aria-label={t('notificationCenter.dismiss')}
                       title={t('notificationCenter.dismiss')}
                       onClick={() =>

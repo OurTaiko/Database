@@ -86,8 +86,15 @@ func (s *Server) voteSubject(w http.ResponseWriter, r *http.Request, load subjec
 	result := VoteResult{MyVote: value, Upvotes: new(int), Downvotes: new(int)}
 	e = tx.QueryRow(ctx, tally, subject.id()).Scan(result.Upvotes, result.Downvotes)
 	// A milestone names no voter; the owner's own vote never notifies them.
-	if e == nil && value == 1 && subject.owner != u.User.ID {
-		e = notifyUpvoteMilestone(ctx, tx, kind, subject.owner, Notice{ChartID: subject.chartID, DanID: subject.danID}, *result.Upvotes)
+	if e == nil && value == 1 {
+		for _, owner := range subject.owners {
+			if owner == u.User.ID {
+				continue
+			}
+			if e = notifyUpvoteMilestone(ctx, tx, kind, owner, Notice{ChartID: subject.chartID, DanID: subject.danID}, *result.Upvotes); e != nil {
+				break
+			}
+		}
 	}
 	if e == nil {
 		e = tx.Commit(ctx)

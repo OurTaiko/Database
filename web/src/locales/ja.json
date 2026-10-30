@@ -493,7 +493,6 @@
     "hasDouble": "1P／2P 別譜面あり",
     "hasBranching": "譜面分岐あり",
     "record": "データベース記録",
-    "uploader": "アップロード者",
     "created": "追加日時",
     "updated": "最終変更",
     "files": "ファイル",
@@ -879,8 +878,28 @@
     }
   },
   "collaboration": {
-    "owner": "アップロード者",
-    "ownerBadgeTitle": "この譜面のアップロード者"
+    "add": "共同制作者を追加",
+    "description": "相手が承認すると所有者となり、情報の編集、ファイル・カバーの変更、譜面の削除、共同制作者の招待が可能になります。",
+    "search": "ニックネームで検索",
+    "invite": "招待を送信",
+    "sent": "招待を送信しました。相手は通知から承認できます。",
+    "owner": "所有者",
+    "owners": "所有者",
+    "pending": "承認待ち",
+    "noUsers": "ユーザーが見つかりません",
+    "notice": "{{actor}} さんから「{{chart}}」の共同制作への招待が届きました",
+    "permissions": "承認すると、この譜面のすべての管理権限を取得します。",
+    "accept": "承認",
+    "decline": "辞退",
+    "accepted": "承認済み。所有者になりました。",
+    "declined": "辞退済み",
+    "ownerBadgeTitle": "この譜面の所有者",
+    "leave": "所有権を放棄",
+    "leaveTitle": "この譜面の所有権を放棄しますか？",
+    "leaveDescription": "所有者ではなくなり、編集・ファイルの差し替え・削除ができなくなります。他の所有者には影響しません。元に戻すには所有者から再度招待してもらう必要があります。",
+    "leaveConfirm": "放棄する",
+    "leavingNow": "処理中…",
+    "left": "この譜面の所有者ではなくなりました。"
   },
   "constants": {
     "title": "譜面定数",

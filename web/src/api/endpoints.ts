@@ -19,8 +19,8 @@ export type ChartQuery = {
   level?: string
   nijiiro?: string
   files?: string
-  /** A user's uploads (their user page). */
-  uploader?: string
+  /** Charts a user owns (their user page). */
+  owner?: string
 }
 
 export const endpoints = {
@@ -51,6 +51,10 @@ export const endpoints = {
   /** GET /charts/{id} looks for the chart's number unless told by=id. */
   chartDetail: (id: string) => withQuery(chartPath(id), { by: 'id' }),
   chartFiles: (id: string) => `${chartPath(id)}/files`,
+  collaborations: (id: string) => `${chartPath(id)}/collaborations`,
+  chartOwnership: (id: string) => `${chartPath(id)}/owners/me`,
+  respondCollaboration: (id: string) =>
+    `${API_ROOT}/me/notifications/${encodeURIComponent(id)}/respond`,
   chartFilesPreview: (id: string) => `${chartPath(id)}/files/preview`,
   cover: (id: string, hash?: string) =>
     withQuery(`${chartPath(id)}/cover`, hash ? { v: hash } : {}),

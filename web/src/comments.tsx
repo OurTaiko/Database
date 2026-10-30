@@ -1,3 +1,4 @@
+import { isChartOwner } from './chart-owners'
 import { danTitle } from './dan-title'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -71,7 +72,7 @@ export function chartSubject(chart: Chart): CommentSubject {
     comments: (query) => endpoints.chartComments(chart.id, query),
     newComment: endpoints.newComment(chart.id),
     commentPath: (id) => commentPath(chart.id, id),
-    isOwner: (userId) => userId === chart.uploaderId,
+    isOwner: (userId) => isChartOwner(chart, userId),
     placeholder: 'interactions.commentPlaceholder',
   }
 }

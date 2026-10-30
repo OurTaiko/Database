@@ -13,7 +13,7 @@ import (
 )
 
 // Votes, comments, notifications, leaderboards and user pages, ported from
-// Fanmade's tests (charts here have numeric IDs and a single uploader).
+// Fanmade's tests (charts here have numeric IDs and owner_ids as on Fanmade).
 type interactionWorld struct {
 	c           testClient
 	s           *Server
@@ -37,9 +37,9 @@ func interactionFixture(t *testing.T) interactionWorld {
 	if _, err := pool.Exec(ctx, `UPDATE users SET permission_flags=1 WHERE id=$1`, owner); err != nil {
 		t.Fatal(err)
 	}
-	err := pool.QueryRow(ctx, `INSERT INTO charts(id,uploader_id,title,bpm,duration,demo_end,created_at) VALUES($2,$1,'Song',120,0,0,now()-interval '2 days') RETURNING id`, owner, ID()).Scan(&w.song)
+	err := pool.QueryRow(ctx, `INSERT INTO charts(id,owner_ids,title,bpm,duration,demo_end,created_at) VALUES($2,ARRAY[$1::text],'Song',120,0,0,now()-interval '2 days') RETURNING id`, owner, ID()).Scan(&w.song)
 	if err == nil {
-		err = pool.QueryRow(ctx, `INSERT INTO charts(id,uploader_id,title,bpm,duration,demo_end) VALUES($2,$1,'Other',120,0,0) RETURNING id`, owner, ID()).Scan(&w.other)
+		err = pool.QueryRow(ctx, `INSERT INTO charts(id,owner_ids,title,bpm,duration,demo_end) VALUES($2,ARRAY[$1::text],'Other',120,0,0) RETURNING id`, owner, ID()).Scan(&w.other)
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -637,9 +637,6 @@ func TestUserDirectory(t *testing.T) {
 		t.Fatalf("directory %d %+v", code, dir)
 	}
 	for _, u := range dir.Items {
-		if u.ID == "00000000000000000000000000000000" {
-			t.Fatal("system account listed")
-		}
 		if u.Nickname == nil {
 			t.Fatal("nickname missing", u.ID)
 		}
@@ -650,7 +647,7 @@ func TestUserDirectory(t *testing.T) {
 	if c.do("", "GET", "/api/v1/users?q=ali", "", &dir); dir.Total != 1 || *dir.Items[0].Nickname != "alice" {
 		t.Fatalf("search %+v", dir)
 	}
-	for path, want := range map[string]int{"/api/v1/users/00000000000000000000000000000000": 404, "/api/v1/users/nope": 404, "/api/v1/users?sort=karma": 400} {
+	for path, want := range map[string]int{"/api/v1/users/ffffffffffffffffffffffffffffffff": 404, "/api/v1/users/nope": 404, "/api/v1/users?sort=karma": 400} {
 		if code := c.do("", "GET", path, "", nil); code != want {
 			t.Fatal(path, code)
 		}

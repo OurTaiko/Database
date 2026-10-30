@@ -19,11 +19,6 @@ import (
 //go:embed *.sql
 var migrations embed.FS
 
-// SystemUploaderID owns the charts once imported from the ESE repository (the
-// importer is gone; new charts are uploaded on the site). It has the shape of
-// an SSO subject, which never issues the all-zero ID.
-const SystemUploaderID = "00000000000000000000000000000000"
-
 // Tables live in the public, internal and auth schemas of the design; the
 // code refers to them unqualified.
 const searchPath = "public,internal,auth"
@@ -103,7 +98,5 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		}
 		current = version
 	}
-	// The importer's uploader; it has no permissions and never signs in.
-	_, err = conn.Exec(ctx, `INSERT INTO users(id) VALUES($1) ON CONFLICT DO NOTHING`, SystemUploaderID)
-	return err
+	return nil
 }

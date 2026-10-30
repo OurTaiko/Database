@@ -1,3 +1,5 @@
+import { chartOwners, isChartOwner } from './chart-owners'
+import { CollaborationDialog } from './collaborations'
 import { formatLocale } from '@/i18n'
 import { chartText } from '@/chart-language'
 import { i18n } from '@/i18n'
@@ -96,7 +98,7 @@ export function Library({
   }
   const { order, category, course, nijiiro, files } = filters
   const stars = filters.level
-  const uploader = mine ? '' : ownerId || ''
+  const owner = mine ? '' : ownerId || ''
 
   useEffect(() => {
     if (mine && !user) return
@@ -105,7 +107,7 @@ export function Library({
     setError('')
     api<ChartList>(
       endpoints.chartList(
-        { q, page, order, category, course, level: stars, nijiiro, files, uploader },
+        { q, page, order, category, course, level: stars, nijiiro, files, owner },
         mine,
       ),
       { signal: controller.signal },
@@ -120,7 +122,7 @@ export function Library({
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [mine, user, q, page, order, category, course, stars, nijiiro, files, uploader])
+  }, [mine, user, q, page, order, category, course, stars, nijiiro, files, owner])
   if (mine && !user)
     return (
       <EmptyState title={t('db.myUploads')}>
@@ -160,7 +162,7 @@ export function Library({
         onSearch={search}
         onPendingChange={setSearchPending}
         onChange={update}
-        counts={!mine && !uploader}
+        counts={!mine && !owner}
       />
       <h2 className="flex items-center gap-2 text-base font-extrabold [&_span]:text-muted-foreground">
         {q ? t('messages.searchResults', { query: q }) : t('db.results')}
@@ -221,7 +223,7 @@ export function Library({
           title={
             filtered
               ? t('messages.noMatchingCharts')
-              : uploader
+              : owner
                 ? t('messages.noPublishedChartsYet')
                 : t('db.noCharts')
           }
@@ -296,9 +298,11 @@ export function Detail() {
   const [chart, setChart] = useState<Chart | null>(null),
     [error, setError] = useState(''),
     [confirm, setConfirm] = useState(false),
+    [leaving, setLeaving] = useState(false),
     [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [coverEditing, setCoverEditing] = useState(false)
+  const [collaborating, setCollaborating] = useState(false)
   const [collecting, setCollecting] = useState(false)
   // The block the chart area shows (block key); empty for the default one.
   const [chosenCourse, setChosenCourse] = useState('')
@@ -312,7 +316,9 @@ export function Detail() {
     setError('')
     setEditing(false)
     setCoverEditing(false)
+    setCollaborating(false)
     setConfirm(false)
+    setLeaving(false)
     setChosenCourse('')
     setActivityTab('image')
     if (!id) return
@@ -326,6 +332,22 @@ export function Detail() {
   useEffect(() => {
     setSection(commentId || location.hash === '#comments' ? 'comments' : 'info')
   }, [id, commentId, location.hash])
+  // Give up one's share of a co-owned chart; the other owners keep it.
+  const leave = async () => {
+    if (!chart) return
+    setBusy(true)
+    try {
+      await api(endpoints.chartOwnership(chart.id), jsonRequest('DELETE', {}, session.csrfToken))
+      setLeaving(false)
+      setChart(await api<Chart>(endpoints.chartDetail(chart.id)))
+      notify(t('collaboration.left'), 'success')
+    } catch (e) {
+      setLeaving(false)
+      notify((e as Error).message, 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
   const remove = async () => {
     if (!chart) return
     setError('')
@@ -372,9 +394,8 @@ export function Detail() {
   ]
   const text = chartText(chart, i18n.resolvedLanguage)
   // The API decides; this only hides controls that would be refused.
-  const canManage =
-    !!session.user &&
-    (session.user.isAdmin || (session.user.canUpload && session.user.id === chart.uploaderId))
+  const isOwner = isChartOwner(chart, session.user?.id)
+  const canManage = !!session.user && (session.user.isAdmin || (session.user.canUpload && isOwner))
   const date = (value: string) =>
     new Date(value).toLocaleString(formatLocale(i18n.resolvedLanguage), {
       dateStyle: 'medium',
@@ -519,6 +540,9 @@ export function Detail() {
       {collecting && session.user && (
         <AddToPlaylistDialog chart={chart} onDismiss={() => setCollecting(false)} />
       )}
+      {collaborating && isOwner && (
+        <CollaborationDialog chart={chart} onDismiss={() => setCollaborating(false)} />
+      )}
       {editing && canManage && (
         <EditMetadata
           key={chart.id}
@@ -658,15 +682,23 @@ export function Detail() {
               <dd>{chart.officialId ?? t('db.none')}</dd>
               <dt>{t('db.databaseId')}</dt>
               <dd className="tabular-nums">{chart.numberId}</dd>
-              <dt className="self-center">{t('db.uploader')}</dt>
-              <dd className="inline-flex items-center gap-2">
-                <UserAvatar
-                  nickname={chart.uploader}
-                  avatarUrl={chart.uploaderAvatarUrl}
-                  className="size-6"
-                  fallbackClassName="text-xs"
-                />
-                <span className="min-w-0 wrap-anywhere">{chart.uploader}</span>
+              <dt className="self-center">{t('collaboration.owners')}</dt>
+              <dd className="flex flex-wrap gap-3">
+                {chartOwners(chart).map((owner) => (
+                  <Link
+                    key={owner.id}
+                    className="inline-flex max-w-full items-center gap-2 align-middle text-link hover:underline"
+                    to={`/users/${encodeURIComponent(owner.id)}`}
+                  >
+                    <UserAvatar
+                      nickname={owner.nickname}
+                      avatarUrl={owner.avatarUrl}
+                      className="size-6"
+                      fallbackClassName="text-xs"
+                    />
+                    <span className="min-w-0 wrap-anywhere">{owner.nickname}</span>
+                  </Link>
+                ))}
               </dd>
               <dt>{t('db.created')}</dt>
               <dd>
@@ -730,7 +762,7 @@ export function Detail() {
               </p>
             </section>
           )}
-          {canManage && (
+          {(canManage || isOwner) && (
             <section
               aria-labelledby="chart-manage-heading"
               className={cn(detailCardClassName, 'space-y-1')}
@@ -739,63 +771,125 @@ export function Detail() {
                 {t('messages.manageChart')}
               </h2>
               <ul className="divide-y">
-                <li>
-                  <Link className={manageItemClassName} to={`/charts/${chart.id}/update`}>
-                    {chart.hasFiles ? t('messages.updateSongAndCharts') : t('db.uploadChartFiles')}
-                    <CaretRightIcon
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  </Link>
-                </li>
-                {chart.hasFiles && (
+                {canManage && (
+                  <>
+                    <li>
+                      <Link className={manageItemClassName} to={`/charts/${chart.id}/update`}>
+                        {chart.hasFiles
+                          ? t('messages.updateSongAndCharts')
+                          : t('db.uploadChartFiles')}
+                        <CaretRightIcon
+                          className="size-4 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                      </Link>
+                    </li>
+                    {chart.hasFiles && (
+                      <li>
+                        <Link className={manageItemClassName} to={`/charts/${chart.id}/edit`}>
+                          {t('editor.open')}
+                          <CaretRightIcon
+                            className="size-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        </Link>
+                      </li>
+                    )}
+                    <li>
+                      <button
+                        ref={editButton}
+                        type="button"
+                        className={manageItemClassName}
+                        onClick={() => setEditing(true)}
+                      >
+                        {t('messages.editInformation')}
+                        <CaretRightIcon
+                          className="size-4 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        className={manageItemClassName}
+                        onClick={() => setCoverEditing(true)}
+                      >
+                        {coverSource(chart) ? t('messages.changeCover') : t('messages.addCover')}
+                        <CaretRightIcon
+                          className="size-4 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                      </button>
+                    </li>
+                  </>
+                )}
+                {isOwner && (
                   <li>
-                    <Link className={manageItemClassName} to={`/charts/${chart.id}/edit`}>
-                      {t('editor.open')}
+                    <button
+                      type="button"
+                      className={manageItemClassName}
+                      onClick={() => setCollaborating(true)}
+                    >
+                      {t('collaboration.add')}
                       <CaretRightIcon
                         className="size-4 shrink-0 text-muted-foreground"
                         aria-hidden="true"
                       />
-                    </Link>
+                    </button>
                   </li>
                 )}
-                <li>
-                  <button
-                    ref={editButton}
-                    type="button"
-                    className={manageItemClassName}
-                    onClick={() => setEditing(true)}
-                  >
-                    {t('messages.editInformation')}
-                    <CaretRightIcon
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  </button>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    className={manageItemClassName}
-                    onClick={() => setCoverEditing(true)}
-                  >
-                    {coverSource(chart) ? t('messages.changeCover') : t('messages.addCover')}
-                    <CaretRightIcon
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  </button>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    className={cn(manageItemClassName, 'text-destructive hover:text-destructive')}
-                    onClick={() => setConfirm(true)}
-                  >
-                    {t('messages.deleteChart')}
-                  </button>
-                </li>
+                {isOwner && chartOwners(chart).length > 1 && (
+                  <li>
+                    <button
+                      type="button"
+                      className={manageItemClassName}
+                      onClick={() => setLeaving(true)}
+                    >
+                      {t('collaboration.leave')}
+                    </button>
+                  </li>
+                )}
+                {canManage && (
+                  <li>
+                    <button
+                      type="button"
+                      className={cn(manageItemClassName, 'text-destructive hover:text-destructive')}
+                      onClick={() => setConfirm(true)}
+                    >
+                      {t('messages.deleteChart')}
+                    </button>
+                  </li>
+                )}
               </ul>
+              {leaving && (
+                <Modal
+                  title={t('collaboration.leaveTitle')}
+                  busy={busy}
+                  onDismiss={() => setLeaving(false)}
+                  actions={
+                    <>
+                      <DialogClose
+                        render={<Button type="button" variant="outline" size="default" />}
+                        disabled={busy}
+                      >
+                        {t('messages.cancel')}
+                      </DialogClose>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="default"
+                        disabled={busy}
+                        onClick={leave}
+                      >
+                        {busy ? t('collaboration.leavingNow') : t('collaboration.leaveConfirm')}
+                      </Button>
+                    </>
+                  }
+                >
+                  {t('collaboration.leaveDescription')}
+                </Modal>
+              )}
               {confirm && (
                 <Modal
                   title={t('messages.deleteThisChart')}

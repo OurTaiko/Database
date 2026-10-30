@@ -496,7 +496,6 @@
     "hasDouble": "Has separate 1P/2P charts",
     "hasBranching": "Includes branching charts",
     "record": "Database record",
-    "uploader": "Uploader",
     "created": "Added",
     "updated": "Last changed",
     "files": "Files",
@@ -891,8 +890,28 @@
     }
   },
   "collaboration": {
-    "owner": "Uploader",
-    "ownerBadgeTitle": "The uploader of this chart"
+    "add": "Add co-creator",
+    "description": "Once accepted, the recipient becomes an owner and can edit details, replace files, change the cover, delete the chart, and invite co-creators.",
+    "search": "Search user nicknames",
+    "invite": "Send invitation",
+    "sent": "Invitation sent. The recipient can accept it in notifications.",
+    "owner": "Owner",
+    "owners": "Owners",
+    "pending": "Pending",
+    "noUsers": "No users found",
+    "notice": "{{actor}} invited you to co-create “{{chart}}”",
+    "permissions": "Accepting gives you full management access to this chart.",
+    "accept": "Accept",
+    "decline": "Decline",
+    "accepted": "Accepted. You are now an owner.",
+    "declined": "Declined",
+    "ownerBadgeTitle": "An owner of this chart",
+    "leave": "Give up ownership",
+    "leaveTitle": "Give up ownership of this chart?",
+    "leaveDescription": "You will no longer be an owner and cannot edit it, replace its files or delete it. The other owners are not affected. An owner must invite you again to restore this.",
+    "leaveConfirm": "Give up ownership",
+    "leavingNow": "Working…",
+    "left": "You are no longer an owner of this chart."
   },
   "constants": {
     "title": "Difficulty constant",

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"ourtaiko.dev/database/api/internal/database"
 )
 
 // PublicUser is intentionally separate from authenticated User: never add login
@@ -37,17 +36,14 @@ type UserDirectory struct {
 }
 
 const publicUserColumns = `u.id,u.first_login_at,u.last_active_at,
- (SELECT count(*) FROM charts c WHERE c.uploader_id=u.id AND ` + publishedChart + `),
+ (SELECT count(*) FROM charts c WHERE c.owner_ids @> ARRAY[u.id] AND ` + publishedChart + `),
  (SELECT count(*) FROM scores sc JOIN chart_difficulties d ON d.id=sc.difficulty_id JOIN charts c ON c.id=d.chart_id
  WHERE sc.user_id=u.id AND ` + publishedChart + `),
  (SELECT count(*) FROM comments m` + commentSubjects + ` WHERE m.author_id=u.id AND ` + visibleComment + `),
  (SELECT COALESCE(sum(v.value),0) FROM comment_votes v JOIN comments m ON m.id=v.comment_id WHERE m.author_id=u.id AND v.user_id<>u.id)+
- (SELECT COALESCE(sum(v.value),0) FROM chart_votes v JOIN charts c ON c.id=v.chart_id WHERE c.uploader_id=u.id AND v.user_id<>u.id)+
+ (SELECT COALESCE(sum(v.value),0) FROM chart_votes v JOIN charts c ON c.id=v.chart_id WHERE c.owner_ids @> ARRAY[u.id] AND v.user_id<>u.id)+
  (SELECT COALESCE(sum(v.value),0) FROM dan_votes v JOIN dan_courses d ON d.id=v.dan_id WHERE d.owner_id=u.id AND v.user_id<>u.id),
  (SELECT count(*) FROM playlists p WHERE p.owner_id=u.id AND p.is_public)`
-
-// The importer's system account owns the ESE charts but is nobody's page.
-const listedUser = `u.id<>'` + database.SystemUploaderID + `'`
 
 func scanPublicUser(row pgx.Row, u *PublicUser) error {
 	return row.Scan(&u.ID, &u.FirstLoginAt, &u.LastActiveAt, &u.ChartCount, &u.ScoreCount, &u.CommentCount, &u.Karma, &u.PlaylistCount)
@@ -66,7 +62,7 @@ func (s *Server) userSpace(w http.ResponseWriter, r *http.Request) {
 	}
 	result := UserSpace{ProfilesAvailable: s.Config.SSO != nil}
 	u := &result.User
-	err := scanPublicUser(s.DB.QueryRow(r.Context(), `SELECT `+publicUserColumns+` FROM users u WHERE u.id=$1 AND `+listedUser, id), u)
+	err := scanPublicUser(s.DB.QueryRow(r.Context(), `SELECT `+publicUserColumns+` FROM users u WHERE u.id=$1`, id), u)
 	if errors.Is(err, pgx.ErrNoRows) {
 		problem(w, 404, "USER_NOT_FOUND", "用户不存在")
 		return
@@ -130,7 +126,7 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	result := UserDirectory{Items: []PublicUser{}, Page: page, PageSize: 12, ProfilesAvailable: s.Config.SSO != nil}
-	const filter = ` WHERE ($1='' OR u.id=ANY($2::text[])) AND ` + listedUser
+	const filter = ` WHERE ($1='' OR u.id=ANY($2::text[]))`
 	if err = tx.QueryRow(r.Context(), `SELECT count(*) FROM users u`+filter, q, matching).Scan(&result.Total); err != nil {
 		internal(w, err)
 		return

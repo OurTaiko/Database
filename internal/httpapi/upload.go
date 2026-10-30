@@ -395,7 +395,7 @@ func (s *Server) managed(w http.ResponseWriter, r *http.Request) (session, Chart
 		return u, c, false
 	}
 	if !canManage(u.User, c) {
-		problem(w, 403, "FORBIDDEN", "只有上传者或管理员可以修改谱面")
+		problem(w, 403, "FORBIDDEN", "只有所有者或管理员可以修改谱面")
 		return u, c, false
 	}
 	return u, c, true

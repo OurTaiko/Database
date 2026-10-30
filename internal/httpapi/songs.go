@@ -109,8 +109,8 @@ func (s *Server) createSong(w http.ResponseWriter, r *http.Request, u session, k
 	}
 	empty, _ := json.Marshal(map[string]string{})
 	id := ID()
-	_, e = tx.Exec(ctx, `INSERT INTO charts(id,nijiiro_id,official_id,uploader_id,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end)
- VALUES($11,$1,$2,$3,$4,$5,$6,$7,$8,0,0,0,$9,$9,$10,15)`,
+	_, e = tx.Exec(ctx, `INSERT INTO charts(id,nijiiro_id,official_id,owner_ids,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end)
+ VALUES($11,$1,$2,ARRAY[$3::text],$4,$5,$6,$7,$8,0,0,0,$9,$9,$10,15)`,
 		nijiiroID, officialID, u.User.ID, coverFile, description, title, subtitle, bpm, empty, flags, id)
 	if e != nil {
 		internal(w, e)
