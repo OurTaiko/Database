@@ -113,13 +113,16 @@ func (s *Server) categories(w http.ResponseWriter, r *http.Request) {
 }
 
 // categorySelection reads a JSON array of category IDs. Omitted, null or empty
-// means unclassified (category_flags 0).
+// means Variety, as on Fanmade.
 func categorySelection(raw json.RawMessage) ([]string, error) {
 	var ids []string
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &ids); err != nil {
 			return nil, err
 		}
+	}
+	if len(ids) == 0 {
+		return []string{"variety"}, nil
 	}
 	sort.Strings(ids)
 	unique := ids[:0]

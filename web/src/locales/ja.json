@@ -33,11 +33,6 @@
     "orderLevel": "★順",
     "orderBpm": "BPM 順",
     "orderUpdated": "最近の変更",
-    "allCategories": "すべて",
-    "filterCourse": "難易度",
-    "anyCourse": "すべての難易度",
-    "filterLevel": "★",
-    "anyLevel": "すべての★",
     "filterNijiiro": "Nijiiro ID",
     "nijiiroAny": "Nijiiro ID の有無を問わない",
     "nijiiroYes": "Nijiiro ID あり",
@@ -86,23 +81,22 @@
     "registerSong": "曲を登録",
     "identifierHint": "どちらの ID も省略できます。Nijiiro ID は正の整数、公式 ID は英数字、ドット、アンダースコア、ハイフンのみです。",
     "identifierInvalid": "Nijiiro ID は正の整数、公式 ID は英数字、ドット、アンダースコア、ハイフンのみ、最大 64 文字です。",
-    "categoriesHint": "複数選択できます。選択しない場合は未分類になります。",
     "translations": "曲名とサブタイトルの訳",
     "translatedTitle": "曲名",
     "translatedSubtitle": "サブタイトル",
     "uploadPermission": "アップロード権限",
     "permissionGranted": "付与済み",
     "permissionNone": "未付与",
-    "categories": {
-      "namco": "ナムコオリジナル",
-      "pop": "ポップス",
-      "game": "ゲームミュージック",
-      "anime": "アニメ",
-      "vocaloid": "ボーカロイド",
-      "variety": "バラエティ",
-      "kids": "キッズ",
-      "classics": "クラシック"
-    },
     "tjaConverted": "{{encoding}} と判定しました。UTF-8 に変換してアップロードします。"
+  },
+  "categories": {
+    "namco": "ナムコオリジナル",
+    "pop": "ポップス",
+    "game": "ゲームミュージック",
+    "anime": "アニメ",
+    "vocaloid": "ボーカロイド",
+    "variety": "バラエティ",
+    "kids": "キッズ",
+    "classics": "クラシック"
   }
 }

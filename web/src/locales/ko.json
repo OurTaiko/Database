@@ -33,11 +33,6 @@
     "orderLevel": "별 수순",
     "orderBpm": "BPM순",
     "orderUpdated": "최근 변경",
-    "allCategories": "전체",
-    "filterCourse": "난이도",
-    "anyCourse": "모든 난이도",
-    "filterLevel": "별 수",
-    "anyLevel": "모든 별 수",
     "filterNijiiro": "Nijiiro ID",
     "nijiiroAny": "Nijiiro ID 유무 무관",
     "nijiiroYes": "Nijiiro ID 있음",
@@ -86,23 +81,22 @@
     "registerSong": "곡 등록",
     "identifierHint": "두 ID 모두 비워 둘 수 있습니다. Nijiiro ID는 양의 정수, 공식 ID는 영문자, 숫자, 점, 밑줄, 하이픈만 사용할 수 있습니다.",
     "identifierInvalid": "Nijiiro ID는 양의 정수여야 하며, 공식 ID는 영문자, 숫자, 점, 밑줄, 하이픈만 최대 64자까지 사용할 수 있습니다.",
-    "categoriesHint": "여러 개 선택할 수 있으며, 선택하지 않으면 미분류입니다.",
     "translations": "곡명과 부제 번역",
     "translatedTitle": "곡명",
     "translatedSubtitle": "부제",
     "uploadPermission": "업로드 권한",
     "permissionGranted": "부여됨",
     "permissionNone": "없음",
-    "categories": {
-      "namco": "남코 오리지널",
-      "pop": "팝",
-      "game": "게임 음악",
-      "anime": "애니메이션",
-      "vocaloid": "보컬로이드",
-      "variety": "버라이어티",
-      "kids": "키즈",
-      "classics": "클래식"
-    },
     "tjaConverted": "{{encoding}}(으)로 인식했습니다. UTF-8로 변환해 업로드합니다."
+  },
+  "categories": {
+    "namco": "남코 오리지널",
+    "pop": "팝",
+    "game": "게임 음악",
+    "anime": "애니메이션",
+    "vocaloid": "보컬로이드",
+    "variety": "버라이어티",
+    "kids": "키즈",
+    "classics": "클래식"
   }
 }

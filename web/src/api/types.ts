@@ -1,6 +1,5 @@
-// OurTaikoSiteKit's API types, then this site's Chart, User and Category and the types built on them.
+// OurTaikoSiteKit's API types, then this site's Chart and User and the types built on them.
 import type {
-  CategoryBase,
   ChartBase,
   ChartList as SharedChartList,
   MyPlaylists as SharedMyPlaylists,
@@ -18,8 +17,6 @@ export type User = UserBase & {
   canUpload: boolean
 }
 export type Session = SharedSession<User>
-export type Category = CategoryBase & { chartCount: number }
-export type CategoryList = { items: Category[]; chartCount: number }
 export type Chart = Metadata &
   ChartBase & {
     nijiiroId: number | null

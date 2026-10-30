@@ -10,7 +10,7 @@ import { endpoints } from '@/api/endpoints'
 import { AudioPlayer } from '@sitekit/components/audio-player'
 import { api, jsonRequest } from '@sitekit/api/client'
 import type { Chart, Locale } from './api/types'
-import { CategoryPicker } from './categories'
+import { CategoryPicker } from '@sitekit/categories'
 import { cn } from '@sitekit/lib/utils'
 import { Modal } from '@sitekit/notifications'
 

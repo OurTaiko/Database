@@ -34,11 +34,6 @@
     "orderLevel": "By star level",
     "orderBpm": "By BPM",
     "orderUpdated": "Recently changed",
-    "allCategories": "All",
-    "filterCourse": "Difficulty",
-    "anyCourse": "Any difficulty",
-    "filterLevel": "Star level",
-    "anyLevel": "Any star level",
     "filterNijiiro": "Nijiiro ID",
     "nijiiroAny": "With or without Nijiiro ID",
     "nijiiroYes": "Has a Nijiiro ID",
@@ -87,23 +82,22 @@
     "registerSong": "Register song",
     "identifierHint": "Both identifiers are optional. The Nijiiro ID is a positive integer; the official ID may contain letters, digits, dots, underscores and hyphens.",
     "identifierInvalid": "The Nijiiro ID must be a positive integer; the official ID may contain letters, digits, dots, underscores and hyphens, up to 64 characters.",
-    "categoriesHint": "Select any number; none means unclassified.",
     "translations": "Translated titles and subtitles",
     "translatedTitle": "Title",
     "translatedSubtitle": "Subtitle",
     "uploadPermission": "Upload permission",
     "permissionGranted": "Granted",
     "permissionNone": "Not granted",
-    "categories": {
-      "namco": "Namco Original",
-      "pop": "Pop",
-      "game": "Game Music",
-      "anime": "Anime",
-      "vocaloid": "VOCALOID",
-      "variety": "Variety",
-      "kids": "Kids",
-      "classics": "Classical"
-    },
     "tjaConverted": "Detected {{encoding}}; the chart is uploaded as UTF-8."
+  },
+  "categories": {
+    "namco": "Namco Original",
+    "pop": "Pop",
+    "game": "Game Music",
+    "anime": "Anime",
+    "vocaloid": "VOCALOID",
+    "variety": "Variety",
+    "kids": "Kids",
+    "classics": "Classical"
   }
 }

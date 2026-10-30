@@ -33,11 +33,6 @@
     "orderLevel": "按星级",
     "orderBpm": "按 BPM",
     "orderUpdated": "最近更改",
-    "allCategories": "全部",
-    "filterCourse": "难度",
-    "anyCourse": "任意难度",
-    "filterLevel": "星级",
-    "anyLevel": "任意星级",
     "filterNijiiro": "Nijiiro ID",
     "nijiiroAny": "不限 Nijiiro ID",
     "nijiiroYes": "有 Nijiiro ID",
@@ -86,23 +81,22 @@
     "registerSong": "登记乐曲",
     "identifierHint": "两个标识都可以留空。Nijiiro ID 为正整数；官方 ID 只能包含字母、数字、点、下划线和连字符。",
     "identifierInvalid": "Nijiiro ID 必须为正整数；官方 ID 只能包含字母、数字、点、下划线和连字符，最长 64 个字符。",
-    "categoriesHint": "可多选；不选表示未分类。",
     "translations": "曲名与副标题译名",
     "translatedTitle": "曲名",
     "translatedSubtitle": "副标题",
     "uploadPermission": "上传权限",
     "permissionGranted": "已授予",
     "permissionNone": "未授予",
-    "categories": {
-      "namco": "南梦宫原创",
-      "pop": "流行音乐",
-      "game": "游戏音乐",
-      "anime": "动画",
-      "vocaloid": "VOCALOID",
-      "variety": "综合",
-      "kids": "儿童",
-      "classics": "古典"
-    },
     "tjaConverted": "已自动识别为 {{encoding}}，上传时转为 UTF-8。"
+  },
+  "categories": {
+    "namco": "南梦宫原创",
+    "pop": "流行音乐",
+    "game": "游戏音乐",
+    "anime": "动画",
+    "vocaloid": "VOCALOID",
+    "variety": "综合",
+    "kids": "儿童",
+    "classics": "古典"
   }
 }

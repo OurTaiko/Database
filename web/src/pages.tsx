@@ -9,8 +9,9 @@ import { DialogClose } from '@sitekit/components/ui/dialog'
 import { ChartCover, CoverDialog } from '@sitekit/components/chart-cover'
 import { AudioPlayer } from '@sitekit/components/audio-player'
 import { buttonVariants, Button } from '@sitekit/components/ui/button'
-import { ChartSearch, chartOrders, filterCourses } from '@/components/chart-search'
-import type { ChartFilters, ChartOrder } from '@/components/chart-search'
+import { ChartSearch, chartOrders } from '@/components/chart-search'
+import type { ChartFilters } from '@/components/chart-search'
+import { readChartFilters } from '@sitekit/components/chart-search'
 import { Skeleton } from '@sitekit/components/ui/skeleton'
 import { Card } from '@sitekit/components/ui/card'
 import { UserAvatar } from '@sitekit/components/user-avatar'
@@ -27,7 +28,7 @@ import {
   ChatCircleIcon,
 } from '@phosphor-icons/react'
 import { api, jsonRequest } from '@sitekit/api/client'
-import { AddToPlaylistDialog } from './playlist-dialogs'
+import { AddToPlaylistDialog } from '@sitekit/playlist-dialogs'
 import type { Chart, ChartList, Vote, VoteResult } from './api/types'
 import { ChartCard, formatDuration } from '@/components/chart-card'
 import { slotKey, supportsChart } from '@sitekit/courses'
@@ -40,7 +41,7 @@ import { CommentSection, chartSubject } from './comments'
 import { VoteControl } from '@sitekit/components/vote-control'
 import { Modal, Notice } from '@sitekit/notifications'
 import { useNotification } from '@sitekit/notification-context'
-import { CategoryLabels } from './categories'
+import { CategoryLabels } from '@sitekit/categories'
 import { cn } from '@sitekit/lib/utils'
 import { PageHero } from '@sitekit/components/page-hero'
 import { Tabs, TabsList, TabsTrigger } from '@sitekit/components/ui/tabs'
@@ -83,16 +84,8 @@ export function Library({
   )
   const q = params.get('q') || '',
     page = Math.min(10000, Math.max(1, Math.floor(Number(params.get('page')) || 1)))
-  const level = Number(params.get('level'))
   const filters: ChartFilters = {
-    order: chartOrders.includes(params.get('order') as ChartOrder)
-      ? (params.get('order') as ChartOrder)
-      : '',
-    category: params.get('category') || '',
-    course: (filterCourses as readonly string[]).includes(params.get('course') || '')
-      ? params.get('course')!
-      : '',
-    level: Number.isInteger(level) && level >= 1 && level <= 10 ? String(level) : '',
+    ...readChartFilters(params, chartOrders),
     nijiiro: ['yes', 'no'].includes(params.get('nijiiro') || '') ? params.get('nijiiro')! : '',
     files: ['yes', 'no'].includes(params.get('files') || '') ? params.get('files')! : '',
   }
