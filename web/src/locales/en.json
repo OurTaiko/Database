@@ -103,6 +103,7 @@
       "variety": "Variety",
       "kids": "Kids",
       "classics": "Classical"
-    }
+    },
+    "tjaConverted": "Detected {{encoding}}; the chart is uploaded as UTF-8."
   }
 }

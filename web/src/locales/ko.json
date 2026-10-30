@@ -102,6 +102,7 @@
       "variety": "버라이어티",
       "kids": "키즈",
       "classics": "클래식"
-    }
+    },
+    "tjaConverted": "{{encoding}}(으)로 인식했습니다. UTF-8로 변환해 업로드합니다."
   }
 }

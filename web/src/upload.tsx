@@ -24,13 +24,14 @@ import { MoviePicker } from '@sitekit/components/movie-picker'
 import { AudioPlayer } from '@sitekit/components/audio-player'
 import { Tabs, TabsList, TabsTrigger } from '@sitekit/components/ui/tabs'
 import { CategoryPicker } from './categories'
-import { api, previewReplacement, uploadChart } from './api/client'
+import { api, previewReplacement, uploadChart } from '@sitekit/api/client'
 import type { Chart } from './api/types'
 import { EmptyState } from '@sitekit/components/empty-state'
 import { Notice } from '@sitekit/notifications'
 import { useNotification } from '@sitekit/notification-context'
 import { useSession } from './session-context'
 import { isAudioFilename, isMovieFilename, maxAudio, maxTja } from './tja'
+import { normalizeTja } from '@sitekit/tja-encoding'
 import { officialIdPattern, parseBpm, parseNijiiroId } from './edit-metadata'
 import { audioDiffers, replacementFields, reviewReplacement } from '@sitekit/replacement-diff'
 import type { Proposal, ReplacementPreview, Review } from '@sitekit/replacement-diff'
@@ -154,6 +155,9 @@ export function UploadPage({
   const hasStoredMovie = replacing && !!existing?.movieHash
   const [demoStart, setDemoStart] = useState('0'),
     [demoEnd, setDemoEnd] = useState('15')
+  // The TJA as uploaded: the site takes UTF-8 only, so the page converts other encodings first.
+  const [utf8Tja, setUtf8Tja] = useState<{ file: File; sourceEncoding: string } | null>(null),
+    [encodingError, setEncodingError] = useState('')
   const [audioUrl, setAudioUrl] = useState('')
   const [audioDuration, setAudioDuration] = useState<number | null>(null)
   useEffect(() => () => controller.current?.abort(), [])
@@ -173,6 +177,30 @@ export function UploadPage({
       active = false
     }
   }, [tja])
+  // WAVE names the audio, which helps tell legacy encodings apart.
+  const waveName = audio?.name ?? retainedAudioName ?? ''
+  useEffect(() => {
+    let active = true
+    setUtf8Tja(null)
+    setEncodingError('')
+    if (!tja || !tja.size || tja.size > maxTja) return
+    void tja
+      .arrayBuffer()
+      .then((bytes) => normalizeTja(new Uint8Array(bytes), waveName))
+      .then(
+        ({ data, sourceEncoding }) => {
+          if (!active) return
+          const file = new File([data], tja.name, { type: 'text/plain;charset=utf-8' })
+          setUtf8Tja({ file, sourceEncoding })
+        },
+        (e: Error) => {
+          if (active) setEncodingError(e.message)
+        },
+      )
+    return () => {
+      active = false
+    }
+  }, [tja, waveName])
   useEffect(() => {
     setAudioUrl('')
     setAudioDuration(null)
@@ -239,12 +267,14 @@ export function UploadPage({
   const fileError =
     mode === 'song'
       ? ''
-      : tja && (!tja.size || tja.size > maxTja)
+      : tja && (!tja.size || tja.size > maxTja || (utf8Tja && utf8Tja.file.size > maxTja))
         ? t('db.tjaTooLarge')
-        : audio && (!audio.size || audio.size > maxAudio)
-          ? t('db.audioTooLarge')
-          : ''
-  const ready = mode === 'song' ? !!title.trim() : !!tja && (!!audio || !!retainedAudioName)
+        : encodingError
+          ? encodingError
+          : audio && (!audio.size || audio.size > maxAudio)
+            ? t('db.audioTooLarge')
+            : ''
+  const ready = mode === 'song' ? !!title.trim() : !!utf8Tja && (!!audio || !!retainedAudioName)
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (!ready || busy || fileError) return
@@ -302,7 +332,13 @@ export function UploadPage({
     setReviewing({ preview: null, review: null, audioChanged: false })
     try {
       const [preview, audioChanged] = await Promise.all([
-        previewReplacement(existing!.id, tja!, audio?.name, session.csrfToken, abort.signal),
+        previewReplacement(
+          existing!.id,
+          utf8Tja!.file,
+          audio?.name,
+          session.csrfToken,
+          abort.signal,
+        ),
         audioDiffers(existing!, audio),
       ])
       if (abort.signal.aborted) return
@@ -349,7 +385,7 @@ export function UploadPage({
         form.append('subtitle', subtitle.trim())
         form.append('bpm', bpm.trim())
       } else {
-        form.append('tja', tja!)
+        form.append('tja', utf8Tja!.file)
         if (audio) form.append('audio', audio)
         if (movie) form.append('movie', movie)
       }
@@ -365,7 +401,7 @@ export function UploadPage({
         form.append('demoStart', String(fields.demoStart))
         form.append('demoEnd', String(fields.demoEnd))
       }
-      const chart = await uploadChart(
+      const chart = await uploadChart<Chart>(
         form,
         session.csrfToken,
         requestKey.current,
@@ -554,6 +590,11 @@ export function UploadPage({
             {fileError && (
               <p role="alert" className="text-sm text-destructive">
                 {fileError}
+              </p>
+            )}
+            {!fileError && utf8Tja && utf8Tja.sourceEncoding !== 'UTF-8' && (
+              <p className="text-sm text-muted-foreground">
+                {t('db.tjaConverted', { encoding: utf8Tja.sourceEncoding })}
               </p>
             )}
             <CoverPicker file={cover} onChange={setCover} disabled={busy} />

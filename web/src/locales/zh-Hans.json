@@ -102,6 +102,7 @@
       "variety": "综合",
       "kids": "儿童",
       "classics": "古典"
-    }
+    },
+    "tjaConverted": "已自动识别为 {{encoding}}，上传时转为 UTF-8。"
   }
 }

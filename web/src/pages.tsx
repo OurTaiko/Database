@@ -26,7 +26,7 @@ import {
   UploadSimpleIcon,
   ChatCircleIcon,
 } from '@phosphor-icons/react'
-import { api, jsonRequest } from './api/client'
+import { api, jsonRequest } from '@sitekit/api/client'
 import { AddToPlaylistDialog } from './playlist-dialogs'
 import type { Chart, ChartList, Vote, VoteResult } from './api/types'
 import { ChartCard, formatDuration } from '@/components/chart-card'
@@ -46,7 +46,7 @@ import { PageHero } from '@sitekit/components/page-hero'
 import { Tabs, TabsList, TabsTrigger } from '@sitekit/components/ui/tabs'
 import { UploadPage } from './upload'
 import { EmptyState } from '@sitekit/components/empty-state'
-import { coverSource } from './cover'
+import { coverSource } from '@sitekit/cover'
 
 export function Library({
   mine = false,

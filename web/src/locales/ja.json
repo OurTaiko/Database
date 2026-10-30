@@ -102,6 +102,7 @@
       "variety": "バラエティ",
       "kids": "キッズ",
       "classics": "クラシック"
-    }
+    },
+    "tjaConverted": "{{encoding}} と判定しました。UTF-8 に変換してアップロードします。"
   }
 }

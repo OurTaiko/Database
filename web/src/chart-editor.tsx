@@ -15,7 +15,7 @@ import {
   FloppyDiskIcon,
   WarningCircleIcon,
 } from '@phosphor-icons/react'
-import { api, previewReplacement, uploadChart } from './api/client'
+import { api, previewReplacement, uploadChart } from '@sitekit/api/client'
 import type { Chart } from './api/types'
 import { slotKey, baseCourse, courseNames, isSupportedCourse } from './courses'
 import { useSession } from './session-context'
@@ -237,7 +237,6 @@ export function ChartEditorPage() {
       attempted.current = attempt
       const form = new FormData()
       form.append('tja', file, chart.tjaName)
-      form.append('encoding', 'utf-8')
       form.append('confirmReset', 'true')
       if (keepTitles) form.append('keepTitles', 'true')
       // Only a kept range is sent; otherwise the server takes the new text's DEMOSTART.
@@ -245,7 +244,7 @@ export function ChartEditorPage() {
         form.append('demoStart', String(demoStart))
         form.append('demoEnd', String(demoEnd))
       }
-      const updated = await uploadChart(
+      const updated = await uploadChart<Chart>(
         form,
         session.csrfToken,
         requestKey.current,
