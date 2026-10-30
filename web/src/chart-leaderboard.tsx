@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@sitekit/components/ui/table'
-import { baseCourse, slotKey, courseNames } from './courses'
+import { blockName, slotKey } from '@sitekit/courses'
 import { Notice } from '@sitekit/notifications'
 import { useSession } from './session-context'
 
@@ -95,7 +95,7 @@ export function ChartLeaderboard({ chart, course }: { chart: Chart; course: stri
           <Table>
             <TableCaption className="sr-only">
               {t('messages.difficultyLeaderboard', {
-                difficulty: courseNames[baseCourse(course)] ?? course,
+                difficulty: blockName(course),
               })}
             </TableCaption>
             <TableHeader>

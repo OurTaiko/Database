@@ -17,11 +17,11 @@ import {
 } from '@phosphor-icons/react'
 import { api, previewReplacement, uploadChart } from '@sitekit/api/client'
 import type { Chart } from './api/types'
-import { slotKey, baseCourse, courseNames, isSupportedCourse } from './courses'
+import { slotKey, baseCourse, blockName } from '@sitekit/courses'
 import { useSession } from './session-context'
 import { Notice } from '@sitekit/notifications'
 import { useNotification } from '@sitekit/notification-context'
-import { parsePreviewTja } from './preview-tja'
+import { parsePreviewTja } from '@sitekit/preview-tja'
 import { maxTja } from './tja'
 import type { Side } from './tja'
 
@@ -36,14 +36,6 @@ const TjaEditor = lazy(() => import('@sitekit/components/tja-editor'))
 function createRequestKey() {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-}
-
-// Localized name of a block key such as "Oni" or "Oni_2p".
-function blockName(key: string): string {
-  const course = baseCourse(key)
-  const name = isSupportedCourse(course) ? courseNames[course] : course
-  const side = key.slice(course.length)
-  return side ? `${name} ${side.slice(1).toUpperCase()}P` : name
 }
 
 // The line a TJA validation error points at, when the API gave one.

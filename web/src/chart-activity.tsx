@@ -14,7 +14,7 @@ import {
   ArrowCounterClockwiseIcon as RotateCcw,
 } from '@phosphor-icons/react'
 import type { Chart } from './api/types'
-import { baseCourse, slotKey, groupCourses, groupLevel, groupName } from './courses'
+import { baseCourse, slotKey, groupCourses, groupLevel, groupName } from '@sitekit/courses'
 import { Notice } from '@sitekit/notifications'
 import { maxTja } from './tja'
 import { ChartLeaderboard } from './chart-leaderboard'

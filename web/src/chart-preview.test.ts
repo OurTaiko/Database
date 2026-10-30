@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { i18n } from '@sitekit/i18n'
-import { slotKey, courseNames, groupCourses, supportsChart } from './courses'
-import { defaultDifficulty } from './chart-difficulty'
-import { parsePreviewTja } from './preview-tja'
+import { slotKey, courseNames, groupCourses, supportsChart } from '@sitekit/courses'
+import { defaultDifficulty } from '@sitekit/chart-difficulty'
+import { parsePreviewTja } from '@sitekit/preview-tja'
 import type { Difficulty } from './tja'
 
 beforeEach(async () => {

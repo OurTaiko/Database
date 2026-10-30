@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { StarIcon } from '@phosphor-icons/react'
 import type { Difficulty } from '@/tja'
-import { groupCourses, groupLevel, groupName } from '@/courses'
+import { groupCourses, groupLevel, groupName } from '@sitekit/courses'
 import { cn } from '@sitekit/lib/utils'
 
 // Fixed course colours, dark text on both themes (AA on every swatch).

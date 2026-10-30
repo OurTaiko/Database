@@ -5,9 +5,7 @@ import { Button } from '@sitekit/components/ui/button'
 import { Checkbox } from '@sitekit/components/ui/checkbox'
 import { DialogClose } from '@sitekit/components/ui/dialog'
 import { CategoryLabels } from './categories'
-import { courseNames } from './courses'
-import type { BaseCourse } from './courses'
-import type { Side } from './tja'
+import { blockName } from '@sitekit/courses'
 import { Modal } from '@sitekit/notifications'
 import type { Line, LineLabel, Review } from '@sitekit/replacement-diff'
 
@@ -19,12 +17,6 @@ export type ReplacementFiles = {
   keptAudio: string
   cover: string | null
   movie: { name: string } | 'remove' | null
-}
-
-// The block's course, with its side when it is one of a 1P/2P pair.
-function blockName(course: string, side: Side) {
-  const name = courseNames[course as BaseCourse] ?? course
-  return side === 'single' ? name : `${name} ${side === 'p1' ? '1P' : '2P'}`
 }
 
 function useLabel() {
@@ -50,10 +42,7 @@ function useLabel() {
         )
       case 'maker':
         return t('messages.courseCreator', {
-          difficulty: blockName(
-            label.slot.replace(/_[12]p$/, ''),
-            label.slot.endsWith('_1p') ? 'p1' : label.slot.endsWith('_2p') ? 'p2' : 'single',
-          ),
+          difficulty: blockName(label.slot),
         })
       case 'demo':
         return t('messages.previewRange')
@@ -243,7 +232,7 @@ export function ReplacementReview({
                   className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2"
                 >
                   <span className="font-bold">
-                    {blockName(block.course, block.side)}{' '}
+                    {blockName(block)}{' '}
                     <span className="font-normal text-muted-foreground tabular-nums">
                       {block.from != null && block.to != null && block.from !== block.to
                         ? `★${block.from} → ★${block.to}`
