@@ -67,7 +67,7 @@ export function ChartSearch({
         items={[
           { value: '', label: t('db.filesAny') },
           { value: 'yes', label: t('db.filesYes') },
-          { value: 'no', label: t('db.noFiles') },
+          { value: 'no', label: t('messages.noFiles') },
         ]}
         onValueChange={(value) => onChange({ files: value })}
       />

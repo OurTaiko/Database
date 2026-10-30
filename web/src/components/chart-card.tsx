@@ -26,7 +26,7 @@ export function ChartCard({ chart }: { chart: Chart }) {
             <li>
               <Badge variant="outline" className="text-muted-foreground">
                 <FileDashedIcon className="size-3" aria-hidden="true" />
-                {t('db.noFiles')}
+                {t('messages.noFiles')}
               </Badge>
             </li>
           )}

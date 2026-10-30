@@ -47,14 +47,14 @@ func uploadReadError(w http.ResponseWriter, e error) {
 	problem(w, 400, "UPLOAD_FILES_INVALID", "上传内容不完整，请重试")
 }
 
-// uploader requires a signed-in user holding the upload permission bit, or an administrator.
+// uploader requires a signed-in administrator: only administrators add charts here.
 func (s *Server) uploader(w http.ResponseWriter, r *http.Request) (session, bool) {
 	u, ok := s.required(w, r, true)
 	if !ok {
 		return u, false
 	}
-	if !u.User.CanUpload {
-		problem(w, 403, "UPLOAD_FORBIDDEN", "此账号没有上传权限")
+	if !u.User.IsAdmin {
+		problem(w, 403, "UPLOAD_FORBIDDEN", "只有管理员可以上传谱面")
 		return u, false
 	}
 	return u, true

@@ -16,10 +16,6 @@ import (
 func TestChartCollaborations(t *testing.T) {
 	world := interactionFixture(t)
 	c, s, song := world.c, world.s, world.song
-	// Here editing also takes the upload permission, which the owner already has.
-	if _, e := s.DB.Exec(context.Background(), `UPDATE users SET permission_flags=1 WHERE id=ANY($1)`, []string{testUsers["alice"].ID, testUsers["bob"].ID}); e != nil {
-		t.Fatal(e)
-	}
 	const alice = "9b893bc6d9422c93536ff0df503b81e9"
 	const bob = "5f0c4a0b0e7b4d3c9a6f1e2d3c4b5a69"
 	invite := func(user, chart, recipient string, want int) {
@@ -163,10 +159,6 @@ func TestChartCollaborations(t *testing.T) {
 func TestConcurrentCollaboratorInvitations(t *testing.T) {
 	world := interactionFixture(t)
 	c, s, song := world.c, world.s, world.song
-	// Here editing also takes the upload permission, which the owner already has.
-	if _, e := s.DB.Exec(context.Background(), `UPDATE users SET permission_flags=1 WHERE id=ANY($1)`, []string{testUsers["alice"].ID, testUsers["bob"].ID}); e != nil {
-		t.Fatal(e)
-	}
 	const alice = "9b893bc6d9422c93536ff0df503b81e9"
 	var wg sync.WaitGroup
 	codes := make(chan int, 6)
@@ -200,10 +192,6 @@ func TestConcurrentCollaboratorInvitations(t *testing.T) {
 func TestLeaveCoOwnedChart(t *testing.T) {
 	world := interactionFixture(t)
 	c, s, song := world.c, world.s, world.song
-	// Here editing also takes the upload permission, which the owner already has.
-	if _, e := s.DB.Exec(context.Background(), `UPDATE users SET permission_flags=1 WHERE id=ANY($1)`, []string{testUsers["alice"].ID, testUsers["bob"].ID}); e != nil {
-		t.Fatal(e)
-	}
 	ctx := context.Background()
 	const owner, alice, bob = "d46774d30dd13b92d9e536808da468a4", "9b893bc6d9422c93536ff0df503b81e9", "5f0c4a0b0e7b4d3c9a6f1e2d3c4b5a69"
 	path := "/api/v1/charts/" + song + "/owners/me"

@@ -2,7 +2,7 @@ import { isChartOwner } from '@sitekit/chart-owners'
 import { useTranslation } from 'react-i18next'
 import { chartText } from '@sitekit/chart-language'
 import { i18n } from '@sitekit/i18n'
-import { endpoints } from '@/api/endpoints'
+import { endpoints } from '@sitekit/api/endpoints'
 import { Card } from '@sitekit/components/ui/card'
 import { Label } from '@sitekit/components/ui/label'
 import { Input } from '@sitekit/components/ui/input'
@@ -29,7 +29,7 @@ import type { Chart } from './api/types'
 import { EmptyState } from '@sitekit/components/empty-state'
 import { Notice } from '@sitekit/notifications'
 import { useNotification } from '@sitekit/notification-context'
-import { useSession } from './session-context'
+import { useSession } from '@sitekit/session-context'
 import { isAudioFilename, isMovieFilename, maxAudio, maxTja } from './tja'
 import { normalizeTja } from '@sitekit/tja-encoding'
 import { officialIdPattern, parseBpm, parseNijiiroId } from './edit-metadata'
@@ -88,9 +88,7 @@ export function UpdatePage() {
   if (error) return <Notice>{error}</Notice>
   if (!chart || session.loading) return <p role="status">{t('messages.loadingSong')}</p>
   // The API decides; this only hides a form that would be refused.
-  const canManage =
-    !!session.user &&
-    (session.user.isAdmin || (session.user.canUpload && isChartOwner(chart, session.user.id)))
+  const canManage = !!session.user && (session.user.isAdmin || isChartOwner(chart, session.user.id))
   if (!canManage) return <p>{t('messages.onlyTheUploaderOrAnAdministratorCanUpdateThisSong')}</p>
   return (
     <UploadPage
@@ -219,8 +217,8 @@ export function UploadPage({
     }
   }, [audio])
   if (session.loading) return <p role="status">{t('messages.loadingAccount')}</p>
-  // Only users holding the upload permission get the upload interface.
-  if (!session.user?.canUpload)
+  // Only administrators upload; the API refuses anyone else.
+  if (!session.user?.isAdmin)
     return (
       <EmptyState title={t('db.uploadUnavailable')}>
         <p className="text-muted-foreground text-sm">
@@ -473,7 +471,7 @@ export function UploadPage({
             {existing
               ? replacing
                 ? t('messages.updateSongAndCharts')
-                : t('db.uploadChartFiles')
+                : t('messages.uploadChartFiles')
               : t('db.uploadTitle')}
           </h1>
         )}

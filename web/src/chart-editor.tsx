@@ -2,7 +2,7 @@ import { isChartOwner } from '@sitekit/chart-owners'
 import { chartText } from '@sitekit/chart-language'
 import { i18n } from '@sitekit/i18n'
 import { useTranslation } from 'react-i18next'
-import { endpoints } from '@/api/endpoints'
+import { endpoints } from '@sitekit/api/endpoints'
 import { Button } from '@sitekit/components/ui/button'
 import { Card } from '@sitekit/components/ui/card'
 import { Progress } from '@sitekit/components/ui/progress'
@@ -18,7 +18,7 @@ import {
 import { api, previewReplacement, uploadChart } from '@sitekit/api/client'
 import type { Chart } from './api/types'
 import { slotKey, baseCourse, blockName } from '@sitekit/courses'
-import { useSession } from './session-context'
+import { useSession } from '@sitekit/session-context'
 import { Notice } from '@sitekit/notifications'
 import { useNotification } from '@sitekit/notification-context'
 import { parsePreviewTja } from '@sitekit/preview-tja'
@@ -263,9 +263,7 @@ export function ChartEditorPage() {
   if (error) return <Notice>{error}</Notice>
   if (!chart || original === null)
     return <p className="text-sm text-muted-foreground">{t('editor.loading')}</p>
-  const canManage =
-    !!session.user &&
-    (session.user.isAdmin || (session.user.canUpload && isChartOwner(chart, session.user.id)))
+  const canManage = !!session.user && (session.user.isAdmin || isChartOwner(chart, session.user.id))
   if (!canManage) return <Notice>{t('editor.onlyManagers')}</Notice>
   const title = chartText(chart, i18n.resolvedLanguage).title
   const lines = text.length ? text.split(/\r\n|\r|\n/).length : 0

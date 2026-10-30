@@ -43,7 +43,7 @@ func TestUploadsAreUTF8Only(t *testing.T) {
 		r.Header.Set("X-CSRF-Token", "csrf")
 		r.Header.Set("Idempotency-Key", ID())
 		r.RemoteAddr = "10.8.200.1:1234"
-		r.AddCookie(&http.Cookie{Name: "ourtaiko_db_session", Value: w.c.tokens["owner"]})
+		r.AddCookie(&http.Cookie{Name: "ourtaiko_db_session", Value: w.c.tokens["admin"]})
 		rec := httptest.NewRecorder()
 		w.c.handler.ServeHTTP(rec, r)
 		return rec

@@ -24,7 +24,7 @@ func (w interactionWorld) chart(id string) string {
 	return "/api/v1/charts/" + id
 }
 
-// interactionFixture: owner (with the upload permission) uploaded "Song", two
+// interactionFixture: owner uploaded "Song", two
 // days old, and "Other"; both are registered charts without files.
 func interactionFixture(t *testing.T) interactionWorld {
 	t.Helper()
@@ -34,9 +34,6 @@ func interactionFixture(t *testing.T) interactionWorld {
 	ctx := context.Background()
 	w := interactionWorld{c: c, s: s}
 	owner := testUsers["owner"].ID
-	if _, err := pool.Exec(ctx, `UPDATE users SET permission_flags=1 WHERE id=$1`, owner); err != nil {
-		t.Fatal(err)
-	}
 	err := pool.QueryRow(ctx, `INSERT INTO charts(id,owner_ids,title,bpm,duration,demo_end,created_at) VALUES($2,ARRAY[$1::text],'Song',120,0,0,now()-interval '2 days') RETURNING id`, owner, ID()).Scan(&w.song)
 	if err == nil {
 		err = pool.QueryRow(ctx, `INSERT INTO charts(id,owner_ids,title,bpm,duration,demo_end) VALUES($2,ARRAY[$1::text],'Other',120,0,0) RETURNING id`, owner, ID()).Scan(&w.other)
@@ -672,14 +669,10 @@ func TestPlaylistRemovedNotice(t *testing.T) {
 	}
 }
 
-// Administrators may upload without the permission bit; other users need it.
+// Only administrators upload; an owner who is not one may still manage their charts.
 func TestUploadPermission(t *testing.T) {
 	w := interactionFixture(t)
-	for name, want := range map[string]bool{"owner": true, "admin": true, "alice": false} {
-		var me struct{ User User }
-		if code := w.c.do(name, "GET", "/api/v1/me", "", &me); code != 200 || me.User.CanUpload != want {
-			t.Fatalf("%s canUpload = %t (%d), want %t", name, me.User.CanUpload, code, want)
-		}
+	for name, want := range map[string]bool{"owner": false, "admin": true, "alice": false} {
 		if code := w.c.do(name, "POST", "/api/v1/charts", "", nil); (code == 403) == want {
 			t.Fatalf("%s upload status %d", name, code)
 		}

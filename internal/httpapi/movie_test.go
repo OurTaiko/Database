@@ -180,7 +180,8 @@ func TestBackgroundMovies(t *testing.T) {
 		t.Fatal("background upload did not store the movie", err)
 	}
 
-	// A new chart goes through the same job: its audio decoded, its movie stored.
+	// A new chart (only administrators upload) goes through the same job: its audio decoded,
+	// its movie stored.
 	oggData, err := os.ReadFile("../../kit/audio/testdata/vorbis.ogg")
 	if err != nil {
 		t.Fatal(err)
@@ -201,7 +202,7 @@ func TestBackgroundMovies(t *testing.T) {
 	r.Header.Set("X-CSRF-Token", "csrf")
 	r.Header.Set("Idempotency-Key", ID())
 	r.RemoteAddr = "10.8.200.1:1234"
-	r.AddCookie(&http.Cookie{Name: "ourtaiko_db_session", Value: w.c.tokens["owner"]})
+	r.AddCookie(&http.Cookie{Name: "ourtaiko_db_session", Value: w.c.tokens["admin"]})
 	rec := httptest.NewRecorder()
 	w.c.handler.ServeHTTP(rec, r)
 	var published Chart

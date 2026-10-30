@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { api } from '@sitekit/api/client'
-import { endpoints } from '@/api/endpoints'
+import { endpoints } from '@sitekit/api/endpoints'
 import type { Chart, Leaderboard } from '@/api/types'
 import { formatLocale } from '@sitekit/i18n'
 import { Button } from '@sitekit/components/ui/button'
@@ -19,7 +19,7 @@ import {
 } from '@sitekit/components/ui/table'
 import { blockName, slotKey } from '@sitekit/courses'
 import { Notice } from '@sitekit/notifications'
-import { useSession } from './session-context'
+import { useSession } from '@sitekit/session-context'
 
 // One block's leaderboard (ported from Fanmade): every player once, with their
 // best play on the chart's current files.

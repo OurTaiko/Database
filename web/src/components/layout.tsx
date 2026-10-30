@@ -13,7 +13,7 @@ import {
 } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Notice } from '@sitekit/notifications'
-import { useSession } from '@/session-context'
+import { useSession } from '@sitekit/session-context'
 import { Button, buttonVariants } from '@sitekit/components/ui/button'
 import { UserAvatar } from '@sitekit/components/user-avatar'
 import {
@@ -40,7 +40,7 @@ export function Layout() {
     { to: '/playlists', label: t('playlists.plaza'), icon: PlaylistIcon },
     { to: '/dans', label: t('dans.nav'), icon: MedalIcon },
     { to: '/users', label: t('messages.userSquare'), icon: UsersIcon },
-    ...(session.user?.canUpload
+    ...(session.user?.isAdmin
       ? [{ to: '/me/charts', label: t('messages.chartManager'), icon: FolderHeart }]
       : []),
   ]

@@ -49,8 +49,6 @@ func main() {
 		log.Fatal("Cannot parse .env; check its syntax")
 	}
 	migrateOnly := flag.Bool("migrate", false, "apply migrations and exit")
-	grant := flag.String("grant-upload", "", "give this user ID the upload permission and exit")
-	revoke := flag.String("revoke-upload", "", "take the upload permission from this user ID and exit")
 	flag.Parse()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	pool, err := database.Open(ctx, env("DATABASE_URL", "postgres://localhost/ourtaiko_database?host=/tmp&sslmode=disable"))
@@ -63,20 +61,6 @@ func main() {
 	}
 	if *migrateOnly {
 		log.Print("PostgreSQL migrations completed")
-		return
-	}
-	if id := *grant + *revoke; id != "" {
-		if !validUserID(id) || (*grant != "" && *revoke != "") {
-			log.Fatal("give one 32-character lowercase hexadecimal user ID")
-		}
-		// permission_flags bit 0 is upload. Creating the row lets a user be
-		// granted the permission before their first sign-in.
-		_, err = pool.Exec(ctx, `INSERT INTO users(id,permission_flags) VALUES($1,CASE WHEN $2 THEN 1 ELSE 0 END)
- ON CONFLICT(id) DO UPDATE SET permission_flags=CASE WHEN $2 THEN users.permission_flags | 1 ELSE users.permission_flags & ~1::bigint END`, id, *grant != "")
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Printf("upload permission of %s set to %t", id, *grant != "")
 		return
 	}
 	cancel()

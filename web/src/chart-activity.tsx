@@ -1,6 +1,6 @@
 import { i18n } from '@sitekit/i18n'
 import { useTranslation } from 'react-i18next'
-import { endpoints } from '@/api/endpoints'
+import { endpoints } from '@sitekit/api/endpoints'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@sitekit/components/ui/tabs'
 import { cn } from '@sitekit/lib/utils'
 import { Button } from '@sitekit/components/ui/button'

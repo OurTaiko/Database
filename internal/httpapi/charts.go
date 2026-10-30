@@ -414,9 +414,9 @@ func (s *Server) detail(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, c)
 }
 
-// canManage: an owner while holding the upload permission, or an administrator.
+// canManage: an owner or an administrator, as on Fanmade.
 func canManage(u User, c Chart) bool {
-	return u.IsAdmin || (u.CanUpload && c.hasOwner(u.ID))
+	return u.IsAdmin || c.hasOwner(u.ID)
 }
 
 func (s *Server) remove(w http.ResponseWriter, r *http.Request) {

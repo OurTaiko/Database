@@ -11,11 +11,7 @@ import type {
 import type { Metadata } from '../tja'
 
 export * from '@sitekit/api/types'
-export type User = UserBase & {
-  /** users.permission_flags; bit 0 is the upload permission. */
-  permissionFlags: number
-  canUpload: boolean
-}
+export type User = UserBase
 export type Session = SharedSession<User>
 export type Chart = Metadata &
   ChartBase & {

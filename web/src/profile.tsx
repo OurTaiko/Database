@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { languageNames, normalizeLanguage } from '@sitekit/i18n'
-import { endpoints } from '@/api/endpoints'
+import { endpoints } from '@sitekit/api/endpoints'
 import { UserAvatar } from '@sitekit/components/user-avatar'
 import { buttonVariants } from '@sitekit/components/ui/button'
 import { Card } from '@sitekit/components/ui/card'
@@ -9,7 +9,7 @@ import { Input } from '@sitekit/components/ui/input'
 import { Link } from 'react-router-dom'
 import { ArrowUpRightIcon as ArrowUpRight } from '@phosphor-icons/react'
 import { PROFILE_URL } from '@sitekit/components/profile-plate'
-import { useSession } from './session-context'
+import { useSession } from '@sitekit/session-context'
 import { Notice } from '@sitekit/notifications'
 
 export function ProfilePage() {
@@ -55,12 +55,6 @@ export function ProfilePage() {
           />
           <h2 className="text-base font-extrabold">{user.nickname}</h2>
           <p className="text-sm text-muted-foreground">{t('messages.theNameOthersSee')}</p>
-          <p data-testid="upload-permission" className="text-sm">
-            {t('db.uploadPermission')}：
-            <span className="font-medium">
-              {user.canUpload ? t('db.permissionGranted') : t('db.permissionNone')}
-            </span>
-          </p>
           <a
             className={buttonVariants({ variant: 'outline' })}
             href={`${PROFILE_URL}/users/${encodeURIComponent(user.id)}`}

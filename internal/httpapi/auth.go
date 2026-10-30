@@ -14,10 +14,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// PermissionUpload is bit 0 of users.permission_flags. Only users holding it,
-// and administrators, see the upload entry on the website and may upload.
-const PermissionUpload int64 = 0x1
-
 type User struct {
 	PreferredLanguage string `json:"preferredLanguage"`
 	ID                string `json:"id"`
@@ -25,10 +21,8 @@ type User struct {
 	Nickname          string `json:"nickname"`
 	AvatarURL         string `json:"avatarUrl"`
 	EmailVerified     bool   `json:"emailVerified"`
-	IsAdmin           bool   `json:"isAdmin"`
-	// From users.permission_flags, never from the account center.
-	PermissionFlags int64 `json:"permissionFlags"`
-	CanUpload       bool  `json:"canUpload"`
+	// Administrators upload charts; owners manage their own.
+	IsAdmin bool `json:"isAdmin"`
 }
 type session struct {
 	User          User
@@ -117,9 +111,7 @@ func (s *Server) current(r *http.Request) (session, error) {
 	if e = recordUserActivity(r.Context(), s.DB, v.User.ID, false); e != nil {
 		return session{}, e
 	}
-	e = s.DB.QueryRow(r.Context(), `SELECT permission_flags FROM users WHERE id=$1`, v.User.ID).Scan(&v.User.PermissionFlags)
-	v.User.CanUpload = v.User.IsAdmin || v.User.PermissionFlags&PermissionUpload != 0
-	return v, e
+	return v, nil
 }
 
 // gameSession authenticates a native client by its SSO game token. Browser
