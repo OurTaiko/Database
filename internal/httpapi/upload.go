@@ -84,7 +84,7 @@ func identifiers(nijiiro, official string) (*int32, *string, bool) {
 // Text fields a chart submission may carry besides its files. title,
 // subtitle and bpm describe a song registered without files (R038); with a
 // TJA they are ignored, as the file is the source of those.
-var uploadFields = []string{"encoding", "description", "categoryIds", "nijiiroId", "officialId", "title", "subtitle", "bpm", "demoStart", "demoEnd"}
+var uploadFields = []string{"description", "categoryIds", "nijiiroId", "officialId", "title", "subtitle", "bpm", "demoStart", "demoEnd"}
 
 // receiveUploadForm stages the multipart files tja, audio and cover of a
 // submission in dir and collects the text fields named in allowed. On a bad
@@ -242,7 +242,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "UPLOAD_FILES_INVALID", "必须同时选择 TJA 和一个 OGG 或 MP3 音频，或两者都不选以仅登记乐曲")
 		return
 	}
-	data, meta, ok := readUploadTJA(w, tf, fields["encoding"], af.name)
+	data, meta, ok := readUploadTJA(w, tf, af.name)
 	if !ok {
 		return
 	}
@@ -270,7 +270,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 
 // readUploadTJA normalizes and validates an uploaded TJA against the audio it names
 // (waveCheck, or none when the stored audio stays). It reports false after answering.
-func readUploadTJA(w http.ResponseWriter, tf *stagedFile, encoding, waveCheck string) ([]byte, tja.Metadata, bool) {
+func readUploadTJA(w http.ResponseWriter, tf *stagedFile, waveCheck string) ([]byte, tja.Metadata, bool) {
 	invalid := func(issue *tja.Issue) {
 		respond(w, 422, map[string]any{"code": issue.Code, "message": issue.Message, "errors": []*tja.Issue{issue}, "requestId": w.Header().Get("X-Request-ID"), "validationVersion": tja.Version})
 	}
@@ -279,10 +279,7 @@ func readUploadTJA(w http.ResponseWriter, tf *stagedFile, encoding, waveCheck st
 		internal(w, e)
 		return nil, tja.Metadata{}, false
 	}
-	if encoding == "" {
-		encoding = tja.DetectEncoding(raw)
-	}
-	data, issue := tja.NormalizeUTF8(raw, encoding)
+	data, issue := tja.NormalizeUTF8(raw)
 	if issue != nil {
 		invalid(issue)
 		return nil, tja.Metadata{}, false

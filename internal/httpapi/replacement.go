@@ -132,7 +132,7 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 	if af != nil {
 		waveCheck = af.name
 	}
-	data, meta, ok := readUploadTJA(w, tf, fields["encoding"], waveCheck)
+	data, meta, ok := readUploadTJA(w, tf, waveCheck)
 	if !ok {
 		return
 	}

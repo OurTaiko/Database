@@ -51,11 +51,7 @@ func (s *Server) previewReplacement(w http.ResponseWriter, r *http.Request) {
 	invalid := func(issue *tja.Issue) {
 		respond(w, 422, map[string]any{"code": issue.Code, "message": issue.Message, "errors": []*tja.Issue{issue}, "validationVersion": tja.Version})
 	}
-	encoding := r.FormValue("encoding")
-	if encoding == "" {
-		encoding = tja.DetectEncoding(raw)
-	}
-	data, issue := tja.NormalizeUTF8(raw, encoding)
+	data, issue := tja.NormalizeUTF8(raw)
 	if issue != nil {
 		invalid(issue)
 		return

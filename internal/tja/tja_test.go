@@ -1,8 +1,11 @@
 package tja
 
 import (
+	"bytes"
 	"strings"
 	"testing"
+
+	"golang.org/x/text/encoding/japanese"
 )
 
 const mixed = "\xEF\xBB\xBFTITLE:Song\r\nTITLEJA:曲\r\nTITLEKO:\r\nSUBTITLE:--Artist\r\nBPM:120\r\nWAVE:Song.ogg\r\nOFFSET:-1.5\r\nDEMOSTART:30\r\nSCOREMODE:2\r\n\r\n" +
@@ -12,7 +15,7 @@ const mixed = "\xEF\xBB\xBFTITLE:Song\r\nTITLEJA:曲\r\nTITLEKO:\r\nSUBTITLE:--A
 
 func parseSource(t *testing.T, source, audio string) (Metadata, *Issue) {
 	t.Helper()
-	data, issue := NormalizeUTF8([]byte(source), DetectEncoding([]byte(source)))
+	data, issue := NormalizeUTF8([]byte(source))
 	if issue != nil {
 		return Metadata{}, issue
 	}
@@ -84,7 +87,7 @@ func TestParseAcceptsMovieHeadersAndStyleOne(t *testing.T) {
 }
 
 func TestSetWaveChangesOnlyTheHeader(t *testing.T) {
-	data, _ := NormalizeUTF8([]byte(mixed), "utf-8")
+	data, _ := NormalizeUTF8([]byte(mixed))
 	out, ok := SetWave(data, "abc.ogg")
 	if !ok || WaveName(out) != "abc.ogg" {
 		t.Fatalf("WAVE = %q, ok = %t", WaveName(out), ok)
@@ -94,5 +97,36 @@ func TestSetWaveChangesOnlyTheHeader(t *testing.T) {
 	}
 	if _, ok = SetWave([]byte("TITLE:x\n#START\nWAVE:late.ogg\n"), "abc.ogg"); ok {
 		t.Fatal("a WAVE after #START must not be rewritten")
+	}
+}
+
+func TestNormalizeUTF8(t *testing.T) {
+	want := []byte("TITLE:初音ミク\r\nWAVE:音楽.ogg\r\n")
+	for _, data := range [][]byte{want, append([]byte("\xEF\xBB\xBF"), want...)} {
+		got, issue := NormalizeUTF8(data)
+		if issue != nil || !bytes.Equal(got, want) {
+			t.Fatalf("%q: %v, %q", data, issue, got)
+		}
+	}
+	// Uploads are UTF-8 only; the browser converts Shift-JIS and the rest first.
+	sjis, err := japanese.ShiftJIS.NewEncoder().Bytes(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		data []byte
+		code string
+	}{
+		{sjis, "TJA_ENCODING_INVALID"},
+		{[]byte{0xff}, "TJA_ENCODING_INVALID"},
+		{[]byte("\xEF\xBF\xBD"), "TJA_ENCODING_INVALID"},
+		{[]byte("TITLE:a\x00"), "TJA_ENCODING_INVALID"},
+		{[]byte("\xEF\xBB\xBF"), "FILE_SIZE_INVALID"},
+		{bytes.Repeat([]byte("a"), MaxTJA+1), "FILE_SIZE_INVALID"},
+	} {
+		_, issue := NormalizeUTF8(tc.data)
+		if issue == nil || issue.Code != tc.code {
+			t.Fatalf("%q: %v", tc.data[:min(len(tc.data), 16)], issue)
+		}
 	}
 }
