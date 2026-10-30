@@ -1,7 +1,7 @@
-import { isChartOwner } from './chart-owners'
+import { isChartOwner } from '@sitekit/chart-owners'
 import { useTranslation } from 'react-i18next'
-import { chartText } from '@/chart-language'
-import { i18n } from '@/i18n'
+import { chartText } from '@sitekit/chart-language'
+import { i18n } from '@sitekit/i18n'
 import { endpoints } from '@/api/endpoints'
 import { Card } from '@sitekit/components/ui/card'
 import { Label } from '@sitekit/components/ui/label'
@@ -19,7 +19,7 @@ import {
   CircleNotchIcon as LoaderCircle,
   UploadSimpleIcon as Upload,
 } from '@phosphor-icons/react'
-import { CoverPicker } from '@/components/cover-picker'
+import { CoverPicker } from '@sitekit/components/cover-picker'
 import { MoviePicker } from '@sitekit/components/movie-picker'
 import { AudioPlayer } from '@sitekit/components/audio-player'
 import { Tabs, TabsList, TabsTrigger } from '@sitekit/components/ui/tabs'

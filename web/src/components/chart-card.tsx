@@ -1,5 +1,5 @@
-import { chartText } from '@/chart-language'
-import { i18n } from '@/i18n'
+import { chartText } from '@sitekit/chart-language'
+import { i18n } from '@sitekit/i18n'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import type { Chart } from '@/api/types'
@@ -16,7 +16,7 @@ import {
   GitBranchIcon,
   UsersIcon,
 } from '@phosphor-icons/react'
-import { compactNumber } from '@/components/vote-control'
+import { compactNumber } from '@sitekit/components/vote-control'
 import { cn } from '@sitekit/lib/utils'
 import { categoryStripeColor } from '@sitekit/category-colors'
 import {

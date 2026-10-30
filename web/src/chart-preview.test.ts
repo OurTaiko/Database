@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { i18n } from './i18n'
+import { i18n } from '@sitekit/i18n'
 import { slotKey, courseNames, groupCourses, supportsChart } from './courses'
 import { defaultDifficulty } from './chart-difficulty'
 import { parsePreviewTja } from './preview-tja'

@@ -11,7 +11,7 @@ import { cn } from '@sitekit/lib/utils'
 import { api } from '@sitekit/api/client'
 import { categoryColor } from '@sitekit/category-colors'
 import type { Category, CategoryList } from './api/types'
-import { i18n } from './i18n'
+import { i18n } from '@sitekit/i18n'
 
 const CategoryContext = createContext<{
   items: Category[] | null

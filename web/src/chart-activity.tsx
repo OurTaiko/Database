@@ -1,4 +1,4 @@
-import { i18n } from '@/i18n'
+import { i18n } from '@sitekit/i18n'
 import { useTranslation } from 'react-i18next'
 import { endpoints } from '@/api/endpoints'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@sitekit/components/ui/tabs'
@@ -18,10 +18,10 @@ import { baseCourse, slotKey, groupCourses, groupLevel, groupName } from './cour
 import { Notice } from '@sitekit/notifications'
 import { maxTja } from './tja'
 import { ChartLeaderboard } from './chart-leaderboard'
-import { withChartTitles } from './tja-titles'
+import { withChartTitles } from '@sitekit/tja-titles'
 
 const ChartPreview = lazy(() => import('./chart-preview'))
-const EmbeddedPlayer = lazy(() => import('./embedded-player'))
+const EmbeddedPlayer = lazy(() => import('@sitekit/embedded-player'))
 
 const difficultyTabColors = {
   Easy: '[--difficulty-bg:#f9a15a]',
