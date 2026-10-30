@@ -1,4 +1,5 @@
-package tja
+// Package tjatitles writes the names the database gives a chart into the TJA it hands out.
+package tjatitles
 
 import "strings"
 

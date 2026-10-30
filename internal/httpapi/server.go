@@ -17,9 +17,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"ourtaiko.dev/database/api/internal/tja"
 	"ourtaiko.dev/sitekit/cover"
 	"ourtaiko.dev/sitekit/objectstore"
+	"ourtaiko.dev/sitekit/tja"
 	"ourtaiko.dev/sitekit/video"
 )
 

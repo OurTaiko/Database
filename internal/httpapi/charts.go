@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"ourtaiko.dev/database/api/internal/tja"
 	"ourtaiko.dev/sitekit/constants"
+	"ourtaiko.dev/sitekit/tja"
 )
 
 type Chart struct {

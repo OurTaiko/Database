@@ -8,21 +8,19 @@ import type {
   Session as SharedSession,
   UserBase,
 } from '@sitekit/api/types'
-import type { Metadata } from '../tja'
 
 export * from '@sitekit/api/types'
 export type User = UserBase
 export type Session = SharedSession<User>
-export type Chart = Metadata &
-  ChartBase & {
-    nijiiroId: number | null
-    officialId: string | null
-    tjaSize: number
-    /** MOVIEOFFSET in seconds. */
-    movieOffset?: number
-    /** False for a song registered without a TJA and audio: no blocks, no duration, empty file fields. */
-    hasFiles: boolean
-  }
+export type Chart = ChartBase & {
+  nijiiroId: number | null
+  officialId: string | null
+  tjaSize: number
+  /** MOVIEOFFSET in seconds. */
+  movieOffset?: number
+  /** False for a song registered without a TJA and audio: no blocks, no duration, empty file fields. */
+  hasFiles: boolean
+}
 export type ChartList = SharedChartList<Chart>
 export type Playlist = SharedPlaylist<Chart>
 export type PlaylistPage = SharedPlaylistPage<Chart>

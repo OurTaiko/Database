@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"ourtaiko.dev/database/api/internal/database"
-	"ourtaiko.dev/database/api/internal/tja"
 	"ourtaiko.dev/sitekit/constants"
+	"ourtaiko.dev/sitekit/tja"
 )
 
 // Difficulty constants from storing to rating: every route stored with the blocks, rated by the

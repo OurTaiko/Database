@@ -16,7 +16,7 @@ import {
 import type { Chart } from './api/types'
 import { baseCourse, slotKey, groupCourses, groupLevel, groupName } from '@sitekit/courses'
 import { Notice } from '@sitekit/notifications'
-import { maxTja } from './tja'
+import { maxTja } from '@sitekit/tja'
 import { ChartLeaderboard } from './chart-leaderboard'
 import { withChartTitles } from '@sitekit/tja-titles'
 

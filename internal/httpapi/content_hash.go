@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"ourtaiko.dev/database/api/internal/charthash"
-	"ourtaiko.dev/database/api/internal/tja"
+	"ourtaiko.dev/sitekit/charthash"
 	"ourtaiko.dev/sitekit/constants"
+	"ourtaiko.dev/sitekit/tja"
 )
 
 // RunContentHashBackfill fills chart_difficulties.content_hash for charts stored before

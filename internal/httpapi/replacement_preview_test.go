@@ -15,7 +15,7 @@ import (
 	"testing"
 
 	"ourtaiko.dev/database/api/internal/database"
-	"ourtaiko.dev/database/api/internal/tja"
+	"ourtaiko.dev/sitekit/tja"
 )
 
 // A replacement's preview reads the new TJA block by block against the stored

@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"ourtaiko.dev/database/api/internal/database"
-	"ourtaiko.dev/database/api/internal/tja"
+	"ourtaiko.dev/sitekit/tja"
 )
 
 // Background movies as on Fanmade: a replacement stores the movie transcoded under its hash

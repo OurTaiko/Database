@@ -9,7 +9,7 @@ import (
 	"os"
 	"testing"
 
-	"ourtaiko.dev/database/api/internal/tja"
+	"ourtaiko.dev/sitekit/tja"
 )
 
 // Makers typed on the website, one per block, as on Fanmade: an upload, an edit and a

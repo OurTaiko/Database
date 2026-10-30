@@ -7,7 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"ourtaiko.dev/database/api/internal/tja"
+	"ourtaiko.dev/sitekit/tja"
 )
 
 // Makers typed on the website, one per block, as on Fanmade: an upload, a replacement or

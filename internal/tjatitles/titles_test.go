@@ -1,8 +1,10 @@
-package tja
+package tjatitles
 
 import (
 	"strings"
 	"testing"
+
+	"ourtaiko.dev/sitekit/tja"
 )
 
 func TestWithTitles(t *testing.T) {
@@ -16,7 +18,7 @@ func TestWithTitles(t *testing.T) {
 		t.Fatalf("got\n%q\nwant\n%q", got, want)
 	}
 	// The result still parses, with the new names.
-	m, issue := Parse([]byte(strings.TrimPrefix(got, "\ufeff")), "a.ogg")
+	m, issue := tja.Parse([]byte(strings.TrimPrefix(got, "\ufeff")), "a.ogg")
 	if issue != nil || m.Title != "New" || m.Subtitle != "--New artist" || m.TitleTranslations["origin"] != "New" || m.TitleTranslations["en"] != "New" || m.TitleTranslations["zh"] != "新曲" || m.TitleTranslations["ja"] != "" || m.BPM != 120 {
 		t.Fatalf("parsed %+v %v", m, issue)
 	}

@@ -13,9 +13,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"ourtaiko.dev/database/api/internal/tja"
+	"ourtaiko.dev/database/api/internal/tjatitles"
 	"ourtaiko.dev/sitekit/audio"
 	"ourtaiko.dev/sitekit/objectstore"
+	"ourtaiko.dev/sitekit/tja"
 	"ourtaiko.dev/sitekit/video"
 )
 
@@ -147,7 +148,7 @@ func (s *Server) downloadPackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The package names the chart as the database does (R042).
-	chartText := tja.WithTitles(stored, c.Title, c.Subtitle, c.TitleTranslations, c.SubtitleTranslations)
+	chartText := tjatitles.WithTitles(stored, c.Title, c.Subtitle, c.TitleTranslations, c.SubtitleTranslations)
 	af, e := s.Config.Objects.Open(r.Context(), c.AudioKey)
 	if e != nil {
 		internal(w, e)

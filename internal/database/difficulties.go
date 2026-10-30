@@ -6,8 +6,8 @@ import (
 	"slices"
 
 	"github.com/jackc/pgx/v5"
-	"ourtaiko.dev/database/api/internal/tja"
 	"ourtaiko.dev/sitekit/constants"
+	"ourtaiko.dev/sitekit/tja"
 )
 
 // SetDifficulties makes chart_difficulties hold exactly the given blocks of a

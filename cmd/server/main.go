@@ -16,11 +16,11 @@ import (
 
 	"github.com/joho/godotenv"
 	webapp "ourtaiko.dev/database/api"
-	"ourtaiko.dev/database/api/internal/charthash"
 	"ourtaiko.dev/database/api/internal/database"
 	"ourtaiko.dev/database/api/internal/httpapi"
-	"ourtaiko.dev/database/api/internal/tja"
+	"ourtaiko.dev/sitekit/charthash"
 	"ourtaiko.dev/sitekit/objectstore"
+	"ourtaiko.dev/sitekit/tja"
 )
 
 func env(key, fallback string) string {
