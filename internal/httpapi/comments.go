@@ -283,8 +283,8 @@ type commentState struct {
 }
 
 // subjectWriteLock is how writers lock a comment's or vote's chart or course.
-// Here (unlike Fanmade) votes and comments also refresh the chart's update_at
-// (R010) and the course's tallies, so every writer takes the row lock it will
+// Votes and comments also refresh the chart's update_at (R010; Fanmade too since
+// its 051) and the course's tallies, so every writer takes the row lock it will
 // need up front: two writers holding FOR SHARE and both upgrading would deadlock.
 const subjectWriteLock = "FOR NO KEY UPDATE"
 
