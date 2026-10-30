@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"net/http"
-	"strconv"
 
 	"ourtaiko.dev/database/api/internal/objectstore"
 )
@@ -64,10 +63,9 @@ func (s *Server) gamePlaylistList(w http.ResponseWriter, r *http.Request) {
 	items := []GamePlaylist{}
 	for rows.Next() {
 		p := GamePlaylist{Kind: "favorite"}
-		var id int64
 		var flag CategoryFlags
 		var own bool
-		if e = rows.Scan(&id, &p.Title, &flag, &p.OwnerID, &own, &p.coverKey, &p.coverHash, &p.coverSize, &p.ChartIDs); e != nil {
+		if e = rows.Scan(&p.ID, &p.Title, &flag, &p.OwnerID, &own, &p.coverKey, &p.coverHash, &p.coverSize, &p.ChartIDs); e != nil {
 			rows.Close()
 			internal(w, e)
 			return
@@ -75,7 +73,7 @@ func (s *Server) gamePlaylistList(w http.ResponseWriter, r *http.Request) {
 		if own {
 			p.Kind = "owned"
 		}
-		p.ID, p.Genre = strconv.FormatInt(id, 10), categoryByFlag(flag).Genre
+		p.Genre = categoryByFlag(flag).Genre
 		if len(p.ChartIDs) > 0 {
 			items = append(items, p)
 		}

@@ -38,8 +38,7 @@ var upvoteMilestones = []int{5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 100
 
 // Notice is one event for one recipient. Empty or zero IDs mean "not linked".
 type Notice struct {
-	Recipient, Kind, Actor, CommentID, ChartID string
-	DanID                                      int64
+	Recipient, Kind, Actor, CommentID, ChartID, DanID string
 	// DedupeKey makes the event notify the recipient at most once.
 	DedupeKey string
 	Data      map[string]any
@@ -50,13 +49,6 @@ func nullable(s string) *string {
 		return nil
 	}
 	return &s
-}
-
-func nullableID(n int64) *int64 {
-	if n == 0 {
-		return nil
-	}
-	return &n
 }
 
 // notify records a notice in the caller's transaction. Nobody is notified
@@ -80,7 +72,7 @@ func notify(ctx context.Context, db activityWriter, n Notice) error {
 	_, e = db.Exec(ctx, `INSERT INTO notifications(id,recipient_id,kind,actor_id,chart_id,dan_id,comment_id,data,dedupe_key)
 	 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9 WHERE NOT EXISTS(SELECT 1 FROM notification_mutes WHERE user_id=$2 AND kind=$3)
 	 ON CONFLICT(recipient_id,dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING`,
-		ID(), n.Recipient, n.Kind, nullable(n.Actor), nullable(n.ChartID), nullableID(n.DanID), nullable(n.CommentID), raw, nullable(n.DedupeKey))
+		ID(), n.Recipient, n.Kind, nullable(n.Actor), nullable(n.ChartID), nullable(n.DanID), nullable(n.CommentID), raw, nullable(n.DedupeKey))
 	return e
 }
 
@@ -96,7 +88,7 @@ func notifyUpvoteMilestone(ctx context.Context, db activityWriter, kind, recipie
 		target = link.ChartID
 	}
 	if target == "" {
-		target = "dan" + strconv.FormatInt(link.DanID, 10)
+		target = "dan" + link.DanID
 	}
 	link.Recipient, link.Kind = recipient, kind
 	link.DedupeKey, link.Data = kind+":"+target+":"+strconv.Itoa(upvotes), map[string]any{"upvotes": upvotes}
@@ -195,7 +187,7 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 		var n Notification
 		var actor, chartTitle, commentID, parentID, excerpt *string
 		var chartID *string
-		var danID *int64
+		var danID *string
 		var danTitle []byte
 		if e = rows.Scan(&n.ID, &n.Kind, &n.CreatedAt, &n.Read, &actor, &chartID, &chartTitle, &danID, &danTitle, &commentID, &parentID, &excerpt, &n.Data); e != nil {
 			rows.Close()
@@ -210,7 +202,7 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 			n.Chart = &NotificationChart{ID: *chartID, Title: *chartTitle}
 		}
 		if danID != nil && len(danTitle) > 0 {
-			n.Dan = &NotificationDan{ID: strconv.FormatInt(*danID, 10)}
+			n.Dan = &NotificationDan{ID: *danID}
 			json.Unmarshal(danTitle, &n.Dan.Title)
 		}
 		if commentID != nil && excerpt != nil {

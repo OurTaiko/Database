@@ -79,9 +79,8 @@ type playlistQuerier interface {
 }
 
 // playlistID parses a stored playlist's ID.
-func playlistID(raw string) (int64, bool) {
-	id, e := strconv.ParseInt(raw, 10, 64)
-	return id, e == nil && id > 0
+func playlistID(raw string) (string, bool) {
+	return raw, validID(raw)
 }
 
 func categoryByFlag(flag CategoryFlags) Category {
@@ -115,12 +114,11 @@ const playlistSelect = `SELECT p.id,p.owner_id,p.name,p.description,p.is_public,
 
 func readPlaylist(row pgx.Row) (Playlist, error) {
 	var p Playlist
-	var id int64
 	var flag CategoryFlags
 	var created, updated time.Time
-	e := row.Scan(&id, &p.OwnerID, &p.Name, &p.Description, &p.Public, &flag, &p.CoverHash, &created, &updated, &p.ChartCount, &p.FavoriteCount, &p.Favorited)
+	e := row.Scan(&p.ID, &p.OwnerID, &p.Name, &p.Description, &p.Public, &flag, &p.CoverHash, &created, &updated, &p.ChartCount, &p.FavoriteCount, &p.Favorited)
 	category := categoryByFlag(flag)
-	p.ID, p.CategoryID, p.Genre, p.CreatedAt, p.UpdatedAt = strconv.FormatInt(id, 10), category.ID, category.Genre, &created, &updated
+	p.CategoryID, p.Genre, p.CreatedAt, p.UpdatedAt = category.ID, category.Genre, &created, &updated
 	return p, e
 }
 

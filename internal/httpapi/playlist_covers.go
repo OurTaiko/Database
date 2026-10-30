@@ -29,7 +29,7 @@ func (s *Server) getPlaylistCover(w http.ResponseWriter, r *http.Request) {
 
 // setPlaylistCover points a playlist at its website cover and the game's copy
 // of it, or at neither, and returns the files it pointed at before.
-func setPlaylistCover(r *http.Request, tx pgx.Tx, id int64, file, gameFile *int64) ([]*int64, error) {
+func setPlaylistCover(r *http.Request, tx pgx.Tx, id string, file, gameFile *int64) ([]*int64, error) {
 	var previous []*int64
 	e := tx.QueryRow(r.Context(), `SELECT ARRAY[cover_file,game_cover_file] FROM playlists WHERE id=$1`, id).Scan(&previous)
 	if e == nil {
@@ -61,7 +61,7 @@ func (s *Server) replacePlaylistCover(w http.ResponseWriter, r *http.Request) {
 	}
 	var previous []*int64
 	// Ownership is checked after encoding, under the playlist's lock.
-	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id int64) (bool, error) {
+	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id string) (bool, error) {
 		file, e := s.storeImage(r.Context(), tx, encoded)
 		if e != nil {
 			return false, e
@@ -86,7 +86,7 @@ func (s *Server) removePlaylistCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var previous []*int64
-	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id int64) (bool, error) {
+	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id string) (bool, error) {
 		var e error
 		previous, e = setPlaylistCover(r, tx, id, nil, nil)
 		return true, e

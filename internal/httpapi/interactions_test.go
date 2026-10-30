@@ -489,11 +489,10 @@ func TestDanInteractions(t *testing.T) {
 	w := interactionFixture(t)
 	c, s := w.c, w.s
 	ctx := context.Background()
-	var dan int64
-	if err := s.DB.QueryRow(ctx, `INSERT INTO dan_courses(owner_id,title,code,exams) VALUES($1,'{"ja":"初段","en":"1st Dan"}','SHODAN','[]') RETURNING id`, testUsers["owner"].ID).Scan(&dan); err != nil {
+	danID := ID()
+	if _, err := s.DB.Exec(ctx, `INSERT INTO dan_courses(id,owner_id,title,code,exams) VALUES($2,$1,'{"ja":"初段","en":"1st Dan"}','SHODAN','[]')`, testUsers["owner"].ID, danID); err != nil {
 		t.Fatal(err)
 	}
-	danID := strconv.FormatInt(dan, 10)
 	path := "/api/v1/dans/" + danID
 	var v VoteResult
 	if code := c.do("", "PUT", path+"/vote", `{"value":1}`, nil); code != 401 {
@@ -550,7 +549,7 @@ func TestDanInteractions(t *testing.T) {
 		t.Fatal("karma", space.User.Karma)
 	}
 	// A deleted course hides its comments and notices.
-	if _, err := s.DB.Exec(ctx, `UPDATE dan_courses SET status='deleted' WHERE id=$1`, dan); err != nil {
+	if _, err := s.DB.Exec(ctx, `UPDATE dan_courses SET status='deleted' WHERE id=$1`, danID); err != nil {
 		t.Fatal(err)
 	}
 	if code := c.do("", "GET", path+"/comments", "", nil); code != 404 {
@@ -687,5 +686,49 @@ func TestUploadPermission(t *testing.T) {
 		if code := w.c.do(name, "POST", "/api/v1/charts", "", nil); (code == 403) == want {
 			t.Fatalf("%s upload status %d", name, code)
 		}
+	}
+}
+
+// Playlists have 32-hex IDs (R052) through creation, items, order, favorites and detail.
+func TestPlaylistIDs(t *testing.T) {
+	w := interactionFixture(t)
+	c := w.c
+	var p Playlist
+	if code := c.do("owner", "POST", "/api/v1/playlists", `{"name":"P","public":true}`, &p); code != 201 || !validID(p.ID) {
+		t.Fatal("create", code, p.ID)
+	}
+	path := "/api/v1/playlists/" + p.ID
+	for _, chart := range []string{w.song, w.other} {
+		if code := c.do("owner", "PUT", path+"/items/"+chart, "", nil); code != 201 {
+			t.Fatal("add", chart, code)
+		}
+	}
+	if code := c.do("owner", "PUT", path+"/order", `{"chartIds":["`+w.other+`","`+w.song+`"]}`, nil); code != 200 {
+		t.Fatal("order", code)
+	}
+	var detail Playlist
+	if code := c.do("", "GET", path, "", &detail); code != 200 || len(detail.Charts) != 2 || detail.Charts[0].ID != w.other {
+		t.Fatal("detail", code, detail.Charts)
+	}
+	if code := c.do("alice", "PUT", path+"/favorite", "", nil); code != 200 {
+		t.Fatal("favorite", code)
+	}
+	var mine MyPlaylists
+	if code := c.do("alice", "GET", "/api/v1/me/playlists", "", &mine); code != 200 || len(mine.Favorites) != 1 || mine.Favorites[0].ID != p.ID {
+		t.Fatal("favorites", code, mine.Favorites)
+	}
+	if code := c.do("owner", "PATCH", path, `{"name":"Q"}`, &detail); code != 200 || detail.ID != p.ID || detail.Name != "Q" {
+		t.Fatal("edit", code, detail.ID)
+	}
+	for _, other := range []string{"1", "0123456789ABCDEF0123456789ABCDEF", ID()} {
+		if code := c.do("", "GET", "/api/v1/playlists/"+other, "", nil); code != 404 {
+			t.Fatal("missing playlist", other, code)
+		}
+	}
+	if code := c.do("owner", "DELETE", path+"/items/"+w.song, "", nil); code != 200 {
+		t.Fatal("remove", code)
+	}
+	if code := c.do("owner", "DELETE", path, "", nil); code != 200 {
+		t.Fatal("delete", code)
 	}
 }

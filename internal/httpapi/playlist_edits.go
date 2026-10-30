@@ -58,7 +58,7 @@ func (body *playlistRequest) normalize(w http.ResponseWriter) (CategoryFlags, bo
 	return flag, true
 }
 
-func (s *Server) respondPlaylist(w http.ResponseWriter, r *http.Request, status int, viewer string, id int64) {
+func (s *Server) respondPlaylist(w http.ResponseWriter, r *http.Request, status int, viewer, id string) {
 	p, e := readPlaylist(s.DB.QueryRow(r.Context(), playlistSelect+` WHERE p.id=$2`, viewer, id))
 	if e != nil {
 		internal(w, e)
@@ -110,9 +110,9 @@ func (s *Server) createPlaylist(w http.ResponseWriter, r *http.Request) {
 	if body.Description != nil {
 		description = *body.Description
 	}
-	var id int64
-	if e = tx.QueryRow(ctx, `INSERT INTO playlists(owner_id,name,description,is_public,category_flag) VALUES($1,$2,$3,$4,$5) RETURNING id`,
-		u.User.ID, *body.Name, description, body.Public != nil && *body.Public, flag).Scan(&id); e == nil {
+	id := ID()
+	if _, e = tx.Exec(ctx, `INSERT INTO playlists(id,owner_id,name,description,is_public,category_flag) VALUES($6,$1,$2,$3,$4,$5)`,
+		u.User.ID, *body.Name, description, body.Public != nil && *body.Public, flag, id); e == nil {
 		e = tx.Commit(ctx)
 	}
 	if e != nil {
@@ -124,7 +124,7 @@ func (s *Server) createPlaylist(w http.ResponseWriter, r *http.Request) {
 
 // lockOwnPlaylist locks a playlist for the rest of tx and reports whether the
 // user owns it. Others see a private playlist as missing.
-func lockOwnPlaylist(w http.ResponseWriter, ctx context.Context, tx pgx.Tx, raw, user string) (int64, bool) {
+func lockOwnPlaylist(w http.ResponseWriter, ctx context.Context, tx pgx.Tx, raw, user string) (string, bool) {
 	id, valid := playlistID(raw)
 	var owner string
 	var public bool
@@ -142,22 +142,22 @@ func lockOwnPlaylist(w http.ResponseWriter, ctx context.Context, tx pgx.Tx, raw,
 	default:
 		return id, true
 	}
-	return 0, false
+	return "", false
 }
 
 // ownPlaylist runs change in a transaction holding the user's playlist. change
 // reports false after it has written its own error response.
-func (s *Server) ownPlaylist(w http.ResponseWriter, r *http.Request, user string, change func(tx pgx.Tx, id int64) (bool, error)) (int64, bool) {
+func (s *Server) ownPlaylist(w http.ResponseWriter, r *http.Request, user string, change func(tx pgx.Tx, id string) (bool, error)) (string, bool) {
 	ctx := r.Context()
 	tx, e := s.DB.Begin(ctx)
 	if e != nil {
 		internal(w, e)
-		return 0, false
+		return "", false
 	}
 	defer tx.Rollback(ctx)
 	id, ok := lockOwnPlaylist(w, ctx, tx, r.PathValue("id"), user)
 	if !ok {
-		return 0, false
+		return "", false
 	}
 	ok, e = change(tx, id)
 	if e == nil && ok {
@@ -165,7 +165,7 @@ func (s *Server) ownPlaylist(w http.ResponseWriter, r *http.Request, user string
 	}
 	if e != nil {
 		internal(w, e)
-		return 0, false
+		return "", false
 	}
 	return id, ok
 }
@@ -188,7 +188,7 @@ func (s *Server) editPlaylist(w http.ResponseWriter, r *http.Request) {
 		category = &flag
 	}
 	// An empty description clears it; only an absent field keeps the old value.
-	id, ok := s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id int64) (bool, error) {
+	id, ok := s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id string) (bool, error) {
 		_, e := tx.Exec(r.Context(), `UPDATE playlists SET name=COALESCE($2,name),description=COALESCE($3,description),
  is_public=COALESCE($4,is_public),category_flag=COALESCE($5,category_flag),updated_at=now() WHERE id=$1`,
 			id, body.Name, body.Description, body.Public, category)
@@ -271,7 +271,7 @@ func (s *Server) addPlaylistItem(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	chart := r.PathValue("chart")
 	added, count := false, 0
-	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id int64) (bool, error) {
+	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id string) (bool, error) {
 		// Holding the chart row FOR SHARE serializes the addition with a deletion.
 		e := tx.QueryRow(ctx, `SELECT c.id FROM charts c WHERE c.id=$1 AND `+publishedChart+` FOR SHARE`, chart).Scan(&chart)
 		if errors.Is(e, pgx.ErrNoRows) {
@@ -317,7 +317,7 @@ func (s *Server) removePlaylistItem(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	chart := r.PathValue("chart")
-	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id int64) (bool, error) {
+	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id string) (bool, error) {
 		tag, e := tx.Exec(ctx, `DELETE FROM playlist_items WHERE playlist_id=$1 AND chart_id=$2`, id, chart)
 		if e == nil && tag.RowsAffected() > 0 {
 			_, e = tx.Exec(ctx, `UPDATE playlists SET updated_at=now() WHERE id=$1`, id)
@@ -353,7 +353,7 @@ func (s *Server) orderPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id int64) (bool, error) {
+	_, ok = s.ownPlaylist(w, r, u.User.ID, func(tx pgx.Tx, id string) (bool, error) {
 		rows, e := tx.Query(ctx, `SELECT chart_id FROM playlist_items WHERE playlist_id=$1 ORDER BY position,added_at,chart_id`, id)
 		if e != nil {
 			return false, e
@@ -452,7 +452,7 @@ func (s *Server) unfavoritePlaylist(w http.ResponseWriter, r *http.Request) {
 
 // respondFavorite commits a favorite change, unless e reports that it failed,
 // and replies with the playlist's new count.
-func respondFavorite(w http.ResponseWriter, ctx context.Context, tx pgx.Tx, id int64, favorited bool, e error) {
+func respondFavorite(w http.ResponseWriter, ctx context.Context, tx pgx.Tx, id string, favorited bool, e error) {
 	var total int
 	if e == nil {
 		e = tx.QueryRow(ctx, `SELECT count(*) FROM playlist_favorites WHERE playlist_id=$1`, id).Scan(&total)

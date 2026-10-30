@@ -76,7 +76,7 @@ func (s *Server) voteSubject(w http.ResponseWriter, r *http.Request, load subjec
 		return
 	}
 	table, tally, kind := "chart_votes", `SELECT COALESCE((SELECT upvotes FROM chart_stats WHERE chart_id=$1),0),COALESCE((SELECT downvotes FROM chart_stats WHERE chart_id=$1),0)`, "chart_upvotes"
-	if subject.danID != 0 {
+	if subject.danID != "" {
 		table, tally, kind = "dan_votes", `SELECT upvotes,downvotes FROM dan_courses WHERE id=$1`, "dan_upvotes"
 	}
 	if e = applyVote(ctx, tx, table, subject.column(), subject.id(), u.User.ID, value); e != nil {
