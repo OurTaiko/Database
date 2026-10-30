@@ -25,13 +25,16 @@ type GamePlaylist struct {
 	coverSize           int64
 }
 
-// systemGamePlaylists are the catalog's folders: the system playlists that
-// currently have charts.
-func systemGamePlaylists(ctx context.Context, db playlistQuerier) ([]GamePlaylist, error) {
+// systemGamePlaylists are the folders of the system playlists that currently have
+// charts: the public ones for the catalog, or the viewer's personal ones.
+func systemGamePlaylists(ctx context.Context, db playlistQuerier, viewer string) ([]GamePlaylist, error) {
 	items := []GamePlaylist{}
 	for i := range systemPlaylists {
 		p := &systemPlaylists[i]
-		ids, e := p.chartIDs(ctx, db)
+		if p.personal != (viewer != "") {
+			continue
+		}
+		ids, e := p.chartIDs(ctx, db, viewer)
 		if e != nil {
 			return nil, e
 		}
@@ -43,7 +46,8 @@ func systemGamePlaylists(ctx context.Context, db playlistQuerier) ([]GamePlaylis
 }
 
 // gamePlaylistList returns the signed-in account's own playlists, private ones
-// included, then its favorites. Only charts of the catalog are listed, and
+// included, then its favorites and its personal system playlists (Liked Songs).
+// Only charts of the catalog are listed, and
 // empty playlists are left out. A client adds these to the catalog's folders.
 func (s *Server) gamePlaylistList(w http.ResponseWriter, r *http.Request) {
 	u, ok := s.required(w, r, false)
@@ -83,6 +87,12 @@ func (s *Server) gamePlaylistList(w http.ResponseWriter, r *http.Request) {
 		internal(w, e)
 		return
 	}
+	personal, e := systemGamePlaylists(r.Context(), s.DB, u.User.ID)
+	if e != nil {
+		internal(w, e)
+		return
+	}
+	items = append(items, personal...)
 	if e = s.gamePlaylistDetails(r.Context(), items); e != nil {
 		internal(w, e)
 		return

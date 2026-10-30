@@ -43,8 +43,6 @@
     "officialId": "Official ID",
     "databaseId": "Database ID",
     "none": "None",
-    "hasDouble": "Has separate 1P/2P charts",
-    "hasBranching": "Includes branching charts",
     "record": "Database record",
     "created": "Added",
     "updated": "Last changed",

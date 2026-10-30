@@ -104,7 +104,7 @@ func (s *Server) gameCatalog(w http.ResponseWriter, r *http.Request) {
 		internal(w, err)
 		return
 	}
-	playlists, err := systemGamePlaylists(r.Context(), tx)
+	playlists, err := systemGamePlaylists(r.Context(), tx, "")
 	if err != nil {
 		internal(w, err)
 		return

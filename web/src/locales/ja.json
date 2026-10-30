@@ -42,8 +42,6 @@
     "officialId": "公式 ID",
     "databaseId": "データベース ID",
     "none": "なし",
-    "hasDouble": "1P／2P 別譜面あり",
-    "hasBranching": "譜面分岐あり",
     "record": "データベース記録",
     "created": "追加日時",
     "updated": "最終変更",

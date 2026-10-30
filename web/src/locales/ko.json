@@ -42,8 +42,6 @@
     "officialId": "공식 ID",
     "databaseId": "데이터베이스 ID",
     "none": "없음",
-    "hasDouble": "1P/2P 별도 채보 포함",
-    "hasBranching": "분기 채보 포함",
     "record": "데이터베이스 기록",
     "created": "추가 일시",
     "updated": "최근 변경",

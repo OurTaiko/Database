@@ -341,8 +341,13 @@ func (s *Server) playlistDetail(w http.ResponseWriter, r *http.Request) {
 	var p Playlist
 	var ids []string
 	if system := systemPlaylistByID(r.PathValue("id")); system != nil {
+		viewer := s.viewer(r)
+		if system.personal && viewer == "" {
+			problem(w, 401, "UNAUTHORIZED", "请先登录")
+			return
+		}
 		var e error
-		if ids, e = system.chartIDs(r.Context(), s.DB); e != nil {
+		if ids, e = system.chartIDs(r.Context(), s.DB, viewer); e != nil {
 			internal(w, e)
 			return
 		}

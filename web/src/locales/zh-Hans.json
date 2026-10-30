@@ -42,8 +42,6 @@
     "officialId": "官方 ID",
     "databaseId": "数据库 ID",
     "none": "无",
-    "hasDouble": "含 1P／2P 分侧谱面",
-    "hasBranching": "含分歧谱面",
     "record": "数据库记录",
     "created": "收录时间",
     "updated": "最近更改",

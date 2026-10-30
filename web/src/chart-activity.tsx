@@ -183,7 +183,7 @@ export function ChartActivity({
                       ? t('messages.singleSide')
                       : d.side.slice(1).toUpperCase() + 'P'}
                     {d.branching && (
-                      <GitBranchIcon className="size-3" aria-label={t('db.hasBranching')} />
+                      <GitBranchIcon className="size-3" aria-label={t('messages.hasBranching')} />
                     )}
                   </TabsTrigger>
                 ))}
