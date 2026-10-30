@@ -540,14 +540,7 @@ export function UploadPage({
             onDragOver={(e) => e.preventDefault()}
             onDrop={drop}
           >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-base font-extrabold">{t('db.uploadFiles')}</h2>
-              <span className="text-sm text-muted-foreground">
-                {retainedAudioName
-                  ? t('messages.newTjaRequiredCurrentAudioCanBeKept')
-                  : t('messages.bothFilesAreRequired')}
-              </span>
-            </div>
+            <h2 className="text-base font-extrabold">{t('db.uploadFiles')}</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               {fileTile('tja')}
               {fileTile('audio')}
