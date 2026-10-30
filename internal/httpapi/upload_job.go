@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"ourtaiko.dev/database/api/internal/audio"
-	"ourtaiko.dev/database/api/internal/cover"
 	"ourtaiko.dev/database/api/internal/database"
 	"ourtaiko.dev/database/api/internal/tja"
-	"ourtaiko.dev/database/api/internal/video"
+	"ourtaiko.dev/sitekit/audio"
+	"ourtaiko.dev/sitekit/cover"
+	"ourtaiko.dev/sitekit/video"
 )
 
 // uploadJob is an accepted upload (as Fanmade's): its files are staged and its fast checks

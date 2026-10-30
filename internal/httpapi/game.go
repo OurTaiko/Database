@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"ourtaiko.dev/database/api/internal/audio"
-	"ourtaiko.dev/database/api/internal/objectstore"
-	"ourtaiko.dev/database/api/internal/video"
+	"ourtaiko.dev/sitekit/audio"
+	"ourtaiko.dev/sitekit/objectstore"
+	"ourtaiko.dev/sitekit/video"
 )
 
 // The game API follows the protocol OurTaikoPlay speaks to the Fanmade

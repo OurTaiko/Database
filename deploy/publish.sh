@@ -33,6 +33,7 @@ else
   fi
   git merge --ff-only "$revision"
   test "$(git rev-parse HEAD)" = "$revision" || { echo 'OurTaikoDatabase checkout differs from requested revision'; exit 1; }
+  git submodule update --init --recursive
 fi
 # Build both halves from the same commit before replacing the running service.
 export DATABASE_SOURCE_DIR="$PWD"

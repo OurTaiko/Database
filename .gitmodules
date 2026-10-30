@@ -1,0 +1,4 @@
+[submodule "kit"]
+	path = kit
+	url = https://github.com/OurTaiko/OurTaikoSiteKit.git
+	branch = main

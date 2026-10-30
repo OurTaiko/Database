@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ourtaiko.dev/database/api/internal/audio"
 	"ourtaiko.dev/database/api/internal/tja"
+	"ourtaiko.dev/sitekit/audio"
 )
 
 // replacementBlock is one course×side slot of a replacement as it would land:

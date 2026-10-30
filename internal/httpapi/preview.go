@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"ourtaiko.dev/database/api/internal/audio"
+	"ourtaiko.dev/sitekit/audio"
 )
 
 // refreshPreview cuts the game's song-select preview clip (as Fanmade's): 15 seconds of

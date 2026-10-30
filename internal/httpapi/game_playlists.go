@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"ourtaiko.dev/database/api/internal/objectstore"
+	"ourtaiko.dev/sitekit/objectstore"
 )
 
 // GamePlaylist is a folder of the game's song select: the account's own and

@@ -22,7 +22,7 @@ import (
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/unicode/norm"
 	"ourtaiko.dev/database/api/internal/charthash"
-	"ourtaiko.dev/database/api/internal/constants"
+	"ourtaiko.dev/sitekit/constants"
 )
 
 const Version = "tja-official-v3"

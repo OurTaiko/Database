@@ -20,9 +20,9 @@ import (
 	"sync/atomic"
 
 	"github.com/joho/godotenv"
-	"ourtaiko.dev/database/api/internal/audio"
 	"ourtaiko.dev/database/api/internal/database"
-	"ourtaiko.dev/database/api/internal/objectstore"
+	"ourtaiko.dev/sitekit/audio"
+	"ourtaiko.dev/sitekit/objectstore"
 )
 
 type record struct {

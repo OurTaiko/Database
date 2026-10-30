@@ -11,3 +11,4 @@ web/.env*
 !web/.env.development
 web/test-results
 web/coverage
+kit/web/node_modules

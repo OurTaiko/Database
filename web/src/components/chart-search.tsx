@@ -1,10 +1,10 @@
 import { useTranslation } from 'react-i18next'
 import { SortDescendingIcon } from '@phosphor-icons/react'
-import { ChoiceSelect } from '@/components/choice-select'
-import { SearchInput } from '@/components/search-input'
+import { ChoiceSelect } from '@sitekit/components/choice-select'
+import { SearchInput } from '@sitekit/components/search-input'
 import { categoryName, useCategories } from '@/categories'
-import { cn } from '@/lib/utils'
-import { categoryColor } from '@/category-colors'
+import { cn } from '@sitekit/lib/utils'
+import { categoryColor } from '@sitekit/category-colors'
 
 export const chartOrders = [
   'hot',

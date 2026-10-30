@@ -5,9 +5,9 @@ import { api } from '@/api/client'
 import { endpoints } from '@/api/endpoints'
 import type { Chart, Leaderboard } from '@/api/types'
 import { formatLocale } from '@/i18n'
-import { Button } from '@/components/ui/button'
-import { UserAvatar } from '@/components/user-avatar'
-import { ProfilePlate } from '@/components/profile-plate'
+import { Button } from '@sitekit/components/ui/button'
+import { UserAvatar } from '@sitekit/components/user-avatar'
+import { ProfilePlate } from '@sitekit/components/profile-plate'
 import {
   Table,
   TableBody,
@@ -16,9 +16,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from '@sitekit/components/ui/table'
 import { baseCourse, slotKey, courseNames } from './courses'
-import { Notice } from './notifications'
+import { Notice } from '@sitekit/notifications'
 import { useSession } from './session-context'
 
 // One block's leaderboard (ported from Fanmade): every player once, with their

@@ -6,8 +6,8 @@ import type { Chart } from '@/api/types'
 import { coverSource } from '@/cover'
 import { CategoryLabels } from '@/categories'
 import { supportsChart } from '@/courses'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@sitekit/components/ui/badge'
+import { Card, CardContent } from '@sitekit/components/ui/card'
 import { DifficultyBadges } from '@/components/difficulty-badges'
 import {
   ArrowFatUpIcon,
@@ -17,9 +17,13 @@ import {
   UsersIcon,
 } from '@phosphor-icons/react'
 import { compactNumber } from '@/components/vote-control'
-import { cn } from '@/lib/utils'
-import { categoryStripeColor } from '@/category-colors'
-import { CardCoverBackdrop, coveredTextClassName, useCardCover } from '@/components/card-cover'
+import { cn } from '@sitekit/lib/utils'
+import { categoryStripeColor } from '@sitekit/category-colors'
+import {
+  CardCoverBackdrop,
+  coveredTextClassName,
+  useCardCover,
+} from '@sitekit/components/card-cover'
 
 export function formatDuration(seconds: number) {
   return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`

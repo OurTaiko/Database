@@ -24,10 +24,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/text/unicode/norm"
-	"ourtaiko.dev/database/api/internal/audio"
-	"ourtaiko.dev/database/api/internal/cover"
 	"ourtaiko.dev/database/api/internal/tja"
-	"ourtaiko.dev/database/api/internal/video"
+	"ourtaiko.dev/sitekit/audio"
+	"ourtaiko.dev/sitekit/cover"
+	"ourtaiko.dev/sitekit/video"
 )
 
 type stagedFile struct {

@@ -1,9 +1,9 @@
 import { i18n } from '@/i18n'
 import { useTranslation } from 'react-i18next'
 import { endpoints } from '@/api/endpoints'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@sitekit/components/ui/tabs'
+import { cn } from '@sitekit/lib/utils'
+import { Button } from '@sitekit/components/ui/button'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import {
   FileAudioIcon as FileMusic,
@@ -15,7 +15,7 @@ import {
 } from '@phosphor-icons/react'
 import type { Chart } from './api/types'
 import { baseCourse, slotKey, groupCourses, groupLevel, groupName } from './courses'
-import { Notice } from './notifications'
+import { Notice } from '@sitekit/notifications'
 import { maxTja } from './tja'
 import { ChartLeaderboard } from './chart-leaderboard'
 import { withChartTitles } from './tja-titles'

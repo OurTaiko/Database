@@ -181,7 +181,7 @@ func TestBackgroundMovies(t *testing.T) {
 	}
 
 	// A new chart goes through the same job: its audio decoded, its movie stored.
-	oggData, err := os.ReadFile("../audio/testdata/vorbis.ogg")
+	oggData, err := os.ReadFile("../../kit/audio/testdata/vorbis.ogg")
 	if err != nil {
 		t.Fatal(err)
 	}

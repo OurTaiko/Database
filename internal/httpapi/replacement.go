@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ourtaiko.dev/database/api/internal/audio"
+	"ourtaiko.dev/sitekit/audio"
 )
 
 // Text fields a replacement may carry; omitted ones keep the chart's values.
