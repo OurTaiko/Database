@@ -5,7 +5,6 @@ import type { Site } from '@sitekit/site'
 import type { Chart } from '@/api/types'
 import { ChartCard } from '@/components/chart-card'
 import { ChartSearch, chartOrders, useChartOrderLabels } from '@/components/chart-search'
-import { ChartActivity } from './chart-activity'
 import { EditMetadata } from './edit-metadata'
 import { UploadPage } from './upload'
 
@@ -56,7 +55,6 @@ export const site: Site = {
     nijiiro: choice(params.get('nijiiro')),
     files: choice(params.get('files')),
   }),
-  ChartActivity: (props) => <ChartActivity {...props} chart={props.chart as Chart} />,
   EditMetadata: ({ chart, onSaved, ...props }) => (
     <EditMetadata {...props} chart={chart as Chart} onSaved={onSaved} />
   ),

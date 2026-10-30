@@ -30,8 +30,23 @@ import { EmptyState } from '@sitekit/components/empty-state'
 import { Notice } from '@sitekit/notifications'
 import { useNotification } from '@sitekit/notification-context'
 import { useSession } from '@sitekit/session-context'
-import { isAudioFilename, isMovieFilename, maxAudio, maxTja } from '@sitekit/tja'
-import { normalizeTja } from '@sitekit/tja-encoding'
+import {
+  isAudioFilename,
+  isMovieFilename,
+  prepareTja,
+  validateFiles,
+  validateMovie,
+} from '@sitekit/tja'
+import type { PreparedTja } from '@sitekit/tja'
+import { blockName, slotKey } from '@sitekit/courses'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@sitekit/components/ui/table'
 import { officialIdPattern, parseBpm, parseNijiiroId } from './edit-metadata'
 import { audioDiffers, replacementFields, reviewReplacement } from '@sitekit/replacement-diff'
 import type { Proposal, ReplacementPreview, Review } from '@sitekit/replacement-diff'
@@ -43,21 +58,6 @@ function createRequestKey() {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 type UploadMode = 'files' | 'song'
-
-/**
- * What the server reads from the TJA's headers before the first #START: DEMOSTART (0 when
- * absent) and whether BGMOVIE names a movie. The server checks the file; this only fills the form.
- */
-async function fileHeaders(tja: File) {
-  // The headers are ASCII in every encoding the site accepts, so Latin-1 reads them.
-  const text = new TextDecoder('latin1').decode(await tja.slice(0, 256 * 1024).arrayBuffer())
-  const header = text.split(/#START/i)[0]
-  const demo = /^\s*DEMOSTART\s*:\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*$/im.exec(header)
-  return {
-    demoStart: demo ? Number(demo[1]) : 0,
-    movie: /^\s*BGMOVIE\s*:\s*\S/m.test(header),
-  }
-}
 
 /**
  * Replaces a chart's files through the upload page, as on Fanmade: the page
@@ -145,60 +145,50 @@ export function UploadPage({
   const retainedAudioName = replacing ? existing!.audioName : undefined
   const requestKey = useRef(createRequestKey()),
     controller = useRef<AbortController | null>(null)
-  // The preview range starts as the new TJA's DEMOSTART for 15 seconds, as on Fanmade.
-  const [fileDemo, setFileDemo] = useState<number | null>(null)
-  // The new TJA declares a background movie.
-  const [declaresMovie, setDeclaresMovie] = useState(false)
   const [movie, setMovie] = useState<File | null>(null)
   const hasStoredMovie = replacing && !!existing?.movieHash
+  // The preview range starts as the new TJA's DEMOSTART for 15 seconds.
   const [demoStart, setDemoStart] = useState('0'),
     [demoEnd, setDemoEnd] = useState('15')
-  // The TJA as uploaded: the site takes UTF-8 only, so the page converts other encodings first.
-  const [utf8Tja, setUtf8Tja] = useState<{ file: File; sourceEncoding: string } | null>(null),
-    [encodingError, setEncodingError] = useState('')
+  // The chosen files as the browser checks them (the TJA converted to UTF-8, which the site
+  // takes only), before the server reads them again.
+  const [metadata, setMetadata] = useState<PreparedTja | null>(null),
+    [validating, setValidating] = useState(false),
+    [validationError, setValidationError] = useState('')
+  // Makers typed in the makers table, by slot; the others are the file's.
+  const [typedMakers, setTypedMakers] = useState<Record<string, string>>({})
   const [audioUrl, setAudioUrl] = useState('')
   const [audioDuration, setAudioDuration] = useState<number | null>(null)
   useEffect(() => () => controller.current?.abort(), [])
   useEffect(() => {
     let active = true
-    setFileDemo(null)
-    setDeclaresMovie(false)
-    if (!tja) return
-    void fileHeaders(tja).then(({ demoStart: start, movie: declared }) => {
-      if (!active) return
-      setFileDemo(start)
-      setDeclaresMovie(declared)
-      setDemoStart(String(start))
-      setDemoEnd(String(start + 15))
-    })
+    setMetadata(null)
+    setValidationError('')
+    if (!tja || (!audio && !retainedAudioName)) {
+      setValidating(false)
+      return
+    }
+    setValidating(true)
+    const validation = audio ? validateFiles(tja, audio) : prepareTja(tja, '', retainedAudioName)
+    validation
+      .then((m) => {
+        validateMovie(m, movie, hasStoredMovie)
+        if (!active) return
+        setMetadata(m)
+        setTypedMakers({})
+        setDemoStart(String(m.demoStart))
+        setDemoEnd(String(m.demoStart + 15))
+      })
+      .catch((e: Error) => {
+        if (active) setValidationError(e.message)
+      })
+      .finally(() => {
+        if (active) setValidating(false)
+      })
     return () => {
       active = false
     }
-  }, [tja])
-  // WAVE names the audio, which helps tell legacy encodings apart.
-  const waveName = audio?.name ?? retainedAudioName ?? ''
-  useEffect(() => {
-    let active = true
-    setUtf8Tja(null)
-    setEncodingError('')
-    if (!tja || !tja.size || tja.size > maxTja) return
-    void tja
-      .arrayBuffer()
-      .then((bytes) => normalizeTja(new Uint8Array(bytes), waveName))
-      .then(
-        ({ data, sourceEncoding }) => {
-          if (!active) return
-          const file = new File([data], tja.name, { type: 'text/plain;charset=utf-8' })
-          setUtf8Tja({ file, sourceEncoding })
-        },
-        (e: Error) => {
-          if (active) setEncodingError(e.message)
-        },
-      )
-    return () => {
-      active = false
-    }
-  }, [tja, waveName])
+  }, [tja, audio, movie, retainedAudioName, hasStoredMovie])
   useEffect(() => {
     setAudioUrl('')
     setAudioDuration(null)
@@ -217,21 +207,11 @@ export function UploadPage({
     }
   }, [audio])
   if (session.loading) return <p role="status">{t('messages.loadingAccount')}</p>
-  // Only administrators upload; the API refuses anyone else.
+  // Only administrators upload; the API refuses anyone else. The route asks visitors to sign in.
   if (!session.user?.isAdmin)
     return (
       <EmptyState title={t('db.uploadUnavailable')}>
-        <p className="text-muted-foreground text-sm">
-          {session.user ? t('db.uploadNeedsPermission') : t('db.uploadNeedsSignIn')}
-        </p>
-        {!session.user && (
-          <Link
-            className={buttonVariants({ variant: 'default', size: 'default' })}
-            to="/login?returnTo=/me/charts/publish"
-          >
-            {t('messages.signIn')}
-          </Link>
-        )}
+        <p className="text-muted-foreground text-sm">{t('db.uploadNeedsPermission')}</p>
       </EmptyState>
     )
   const choose = (kind: 'tja' | 'audio', file: File | null) => {
@@ -262,17 +242,8 @@ export function UploadPage({
       setMovie(movies[0])
     }
   }
-  const fileError =
-    mode === 'song'
-      ? ''
-      : tja && (!tja.size || tja.size > maxTja || (utf8Tja && utf8Tja.file.size > maxTja))
-        ? t('db.tjaTooLarge')
-        : encodingError
-          ? encodingError
-          : audio && (!audio.size || audio.size > maxAudio)
-            ? t('db.audioTooLarge')
-            : ''
-  const ready = mode === 'song' ? !!title.trim() : !!utf8Tja && (!!audio || !!retainedAudioName)
+  const fileError = mode === 'song' ? '' : validationError
+  const ready = mode === 'song' ? !!title.trim() : !!metadata && !validating
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (!ready || busy || fileError) return
@@ -312,8 +283,9 @@ export function UploadPage({
   }
   // The range was typed rather than left at the new file's DEMOSTART.
   const typedDemo =
-    fileDemo === null || demoStart !== String(fileDemo) || demoEnd !== String(fileDemo + 15)
-  // Makers always follow the file here; the record is what the form says.
+    !metadata ||
+    demoStart !== String(metadata.demoStart) ||
+    demoEnd !== String(metadata.demoStart + 15)
   const proposal = (): Proposal => ({
     description,
     categoryIds,
@@ -321,7 +293,7 @@ export function UploadPage({
     officialId: officialId.trim(),
     demoStart: Number(demoStart),
     demoEnd: Number(demoEnd),
-    typedMakers: {},
+    typedMakers,
     typedDemo,
   })
   const startReview = async () => {
@@ -332,7 +304,7 @@ export function UploadPage({
       const [preview, audioChanged] = await Promise.all([
         previewReplacement(
           existing!.id,
-          utf8Tja!.file,
+          metadata!.file,
           audio?.name,
           session.csrfToken,
           abort.signal,
@@ -345,7 +317,7 @@ export function UploadPage({
         audioChanged,
         review: reviewReplacement(existing!, preview, proposal(), audioChanged, {
           demo: true,
-          makers: false,
+          makers: true,
         }),
       })
     } catch (e) {
@@ -367,6 +339,11 @@ export function UploadPage({
             officialId: officialId.trim(),
             demoStart: Number(demoStart),
             demoEnd: Number(demoEnd),
+            difficultyMakers: (metadata?.difficulties ?? []).map(({ course, side, maker }) => ({
+              course,
+              side,
+              maker,
+            })),
           }
     // Other choices are a different request; the same choices retry the last one.
     const choices = [...kept].sort().join(',')
@@ -383,7 +360,7 @@ export function UploadPage({
         form.append('subtitle', subtitle.trim())
         form.append('bpm', bpm.trim())
       } else {
-        form.append('tja', utf8Tja!.file)
+        form.append('tja', metadata!.file)
         if (audio) form.append('audio', audio)
         if (movie) form.append('movie', movie)
       }
@@ -394,6 +371,7 @@ export function UploadPage({
       form.append('categoryIds', JSON.stringify(fields.categoryIds))
       form.append('nijiiroId', fields.nijiiroId)
       form.append('officialId', fields.officialId)
+      if (mode === 'files') form.append('difficultyMakers', JSON.stringify(fields.difficultyMakers))
       // A typed or kept range is sent; otherwise the server takes the new file's DEMOSTART.
       if (mode === 'files' && (typedDemo || kept.has('demo'))) {
         form.append('demoStart', String(fields.demoStart))
@@ -415,7 +393,11 @@ export function UploadPage({
       navigate(`/charts/${chart.id}`)
       notify(
         existing
-          ? t(replacing ? 'db.chartFilesReplaced' : 'messages.chartFilesUploaded')
+          ? t(
+              replacing
+                ? 'messages.songUpdatedAllPreviousChartsAndScoresHaveBeenDeleted'
+                : 'messages.chartFilesUploaded',
+            )
           : mode === 'song'
             ? t('messages.songRegistered')
             : t('messages.chartPublished'),
@@ -590,9 +572,9 @@ export function UploadPage({
                 {fileError}
               </p>
             )}
-            {!fileError && utf8Tja && utf8Tja.sourceEncoding !== 'UTF-8' && (
+            {!fileError && metadata && metadata.sourceEncoding !== 'UTF-8' && (
               <p className="text-sm text-muted-foreground">
-                {t('db.tjaConverted', { encoding: utf8Tja.sourceEncoding })}
+                {t('db.tjaConverted', { encoding: metadata.sourceEncoding })}
               </p>
             )}
             <CoverPicker file={cover} onChange={setCover} disabled={busy} />
@@ -652,6 +634,56 @@ export function UploadPage({
             )}
           </Card>
         )}
+        {mode === 'files' && metadata && (
+          <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
+            <h2 className="text-base font-extrabold">{t('messages.difficultiesAndCreators')}</h2>
+            <p className="text-sm text-muted-foreground">
+              {metadata.maker
+                ? t('messages.creatorNamesAreFilledFromMakerYouCanEditEachOne')
+                : t('messages.noMakerWasSpecifiedEnterACreatorForEachDifficulty')}
+            </p>
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">{t('messages.difficulty')}</TableHead>
+                  <TableHead scope="col">{t('messages.creator')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {metadata.difficulties.map((d) => (
+                  <TableRow key={slotKey(d)}>
+                    <TableHead scope="row">
+                      {blockName(d)} ★{d.level}
+                    </TableHead>
+                    <TableCell>
+                      <Input
+                        aria-label={t('messages.courseCreator', { difficulty: blockName(d) })}
+                        value={d.maker}
+                        maxLength={500}
+                        placeholder={t('messages.notSpecified')}
+                        disabled={busy}
+                        onChange={(e) => {
+                          const maker = e.target.value
+                          setTypedMakers((typed) => ({ ...typed, [slotKey(d)]: maker }))
+                          setMetadata(
+                            (current) =>
+                              current && {
+                                ...current,
+                                difficulties: current.difficulties.map((block) =>
+                                  slotKey(block) === slotKey(d) ? { ...block, maker } : block,
+                                ),
+                              },
+                          )
+                          requestKey.current = createRequestKey()
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        )}
         <Card className="min-w-0 gap-5 border-[1.5px] border-border p-5 shadow-none sm:p-6">
           <h2 className="text-base font-extrabold">{t('db.record')}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -679,14 +711,16 @@ export function UploadPage({
           <p className="text-sm text-muted-foreground">{t('db.identifierHint')}</p>
           <CategoryPicker value={categoryIds} onChange={setCategoryIds} disabled={busy} />
           <div className="space-y-2">
-            <Label htmlFor="upload-description">{t('db.notes')}</Label>
+            <Label htmlFor="upload-description">{t('messages.notes')}</Label>
             <Textarea
               id="upload-description"
               rows={4}
+              maxLength={1000}
               value={description}
               disabled={busy}
               onChange={(e) => setDescription(e.target.value)}
             />
+            <p className="text-right text-xs text-muted-foreground">{description.length} / 1000</p>
           </div>
         </Card>
         {busy && (
@@ -740,7 +774,7 @@ export function UploadPage({
             cover: cover?.name ?? null,
             movie: movie
               ? { name: movie.name }
-              : !declaresMovie && hasStoredMovie
+              : !metadata?.movie && hasStoredMovie
                 ? 'remove'
                 : null,
           }}
