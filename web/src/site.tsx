@@ -15,7 +15,7 @@ function NijiiroStat({ chart }: { chart: Chart }) {
   const { t } = useTranslation()
   return (
     <div>
-      <dt>{t('db.nijiiroId')}</dt>
+      <dt>{t('messages.nijiiroId')}</dt>
       <dd data-testid="detail-nijiiro">{chart.nijiiroId ?? '—'}</dd>
     </div>
   )
@@ -25,15 +25,17 @@ function IdentifierRecord({ chart }: { chart: Chart }) {
   const { t } = useTranslation()
   return (
     <>
-      <dt>{t('db.nijiiroId')}</dt>
+      <dt>{t('messages.nijiiroId')}</dt>
       <dd className="tabular-nums">{chart.nijiiroId ?? t('db.none')}</dd>
-      <dt>{t('db.officialId')}</dt>
+      <dt>{t('messages.officialId')}</dt>
       <dd>{chart.officialId ?? t('db.none')}</dd>
     </>
   )
 }
 
 export const site: Site = {
+  brand: 'Database',
+  canUpload: (user) => !!user?.isAdmin,
   chartCard: (chart) => <ChartCard chart={chart as Chart} />,
   chartOrders,
   useChartOrderLabels,

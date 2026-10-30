@@ -12,7 +12,8 @@
     "myCharts": "내 업로드",
     "publishChart": "채보 업로드",
     "noChartsYet": "데이터베이스에 아직 채보가 없습니다",
-    "createdAt": "추가 일시"
+    "createdAt": "추가 일시",
+    "chartsNav": "채보 둘러보기"
   },
   "common": {
     "siteTitle": "OurTaiko Database · 공식 채보"
@@ -25,7 +26,6 @@
     "CHART_FILES_MISSING": "이 곡에는 아직 채보 파일이 없습니다."
   },
   "db": {
-    "browse": "채보 둘러보기",
     "upload": "채보 업로드",
     "searchPlaceholder": "곡명, 번역명, Nijiiro ID 또는 공식 ID 검색",
     "orderLatest": "최신순",
@@ -38,9 +38,7 @@
     "nijiiroAny": "Nijiiro ID 유무 무관",
     "nijiiroYes": "Nijiiro ID 있음",
     "nijiiroNo": "Nijiiro ID 없음",
-    "nijiiroId": "Nijiiro ID",
     "nijiiroIdWithValue": "Nijiiro ID {{id}}",
-    "officialId": "공식 ID",
     "none": "없음",
     "record": "데이터베이스 기록",
     "files": "파일",

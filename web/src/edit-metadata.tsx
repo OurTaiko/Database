@@ -182,7 +182,7 @@ export function EditMetadata({
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="edit-nijiiro-id">{t('db.nijiiroId')}</Label>
+            <Label htmlFor="edit-nijiiro-id">{t('messages.nijiiroId')}</Label>
             <Input
               id="edit-nijiiro-id"
               inputMode="numeric"
@@ -192,7 +192,7 @@ export function EditMetadata({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="edit-official-id">{t('db.officialId')}</Label>
+            <Label htmlFor="edit-official-id">{t('messages.officialId')}</Label>
             <Input
               id="edit-official-id"
               value={officialId}

@@ -12,7 +12,8 @@
     "myCharts": "My uploads",
     "publishChart": "Upload chart",
     "noChartsYet": "The database has no charts yet",
-    "createdAt": "Added"
+    "createdAt": "Added",
+    "chartsNav": "Browse charts"
   },
   "common": {
     "siteTitle": "OurTaiko Database · Official charts"
@@ -26,7 +27,6 @@
     "CHART_FILES_MISSING": "This song has no chart files yet."
   },
   "db": {
-    "browse": "Browse charts",
     "upload": "Upload chart",
     "searchPlaceholder": "Search titles, translations, Nijiiro ID or official ID",
     "orderLatest": "Newest",
@@ -39,9 +39,7 @@
     "nijiiroAny": "With or without Nijiiro ID",
     "nijiiroYes": "Has a Nijiiro ID",
     "nijiiroNo": "No Nijiiro ID",
-    "nijiiroId": "Nijiiro ID",
     "nijiiroIdWithValue": "Nijiiro ID {{id}}",
-    "officialId": "Official ID",
     "none": "None",
     "record": "Database record",
     "files": "Files",

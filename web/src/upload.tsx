@@ -35,7 +35,7 @@ import { normalizeTja } from '@sitekit/tja-encoding'
 import { officialIdPattern, parseBpm, parseNijiiroId } from './edit-metadata'
 import { audioDiffers, replacementFields, reviewReplacement } from '@sitekit/replacement-diff'
 import type { Proposal, ReplacementPreview, Review } from '@sitekit/replacement-diff'
-import { ReplacementReview } from './replacement-review'
+import { ReplacementReview } from '@sitekit/replacement-review'
 
 function createRequestKey() {
   // getRandomValues remains available over LAN HTTP, unlike randomUUID.
@@ -656,7 +656,7 @@ export function UploadPage({
           <h2 className="text-base font-extrabold">{t('db.record')}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="upload-nijiiro-id">{t('db.nijiiroId')}</Label>
+              <Label htmlFor="upload-nijiiro-id">{t('messages.nijiiroId')}</Label>
               <Input
                 id="upload-nijiiro-id"
                 inputMode="numeric"
@@ -666,7 +666,7 @@ export function UploadPage({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="upload-official-id">{t('db.officialId')}</Label>
+              <Label htmlFor="upload-official-id">{t('messages.officialId')}</Label>
               <Input
                 id="upload-official-id"
                 value={officialId}

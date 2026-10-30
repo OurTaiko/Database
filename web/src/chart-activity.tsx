@@ -20,7 +20,7 @@ import { maxTja } from './tja'
 import { ChartLeaderboard } from './chart-leaderboard'
 import { withChartTitles } from '@sitekit/tja-titles'
 
-const ChartPreview = lazy(() => import('./chart-preview'))
+const ChartPreview = lazy(() => import('@sitekit/chart-preview'))
 const EmbeddedPlayer = lazy(() => import('@sitekit/embedded-player'))
 
 const difficultyTabColors = {

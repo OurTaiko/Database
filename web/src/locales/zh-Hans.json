@@ -12,7 +12,8 @@
     "myCharts": "我的上传",
     "publishChart": "上传谱面",
     "noChartsYet": "数据库里还没有谱面",
-    "createdAt": "收录时间"
+    "createdAt": "收录时间",
+    "chartsNav": "浏览谱面"
   },
   "common": {
     "siteTitle": "OurTaiko Database · 官方谱面数据库"
@@ -25,7 +26,6 @@
     "CHART_FILES_MISSING": "该乐曲尚未上传谱面文件。"
   },
   "db": {
-    "browse": "浏览谱面",
     "upload": "上传谱面",
     "searchPlaceholder": "搜索曲名、译名、Nijiiro ID 或官方 ID",
     "orderLatest": "最新收录",
@@ -38,9 +38,7 @@
     "nijiiroAny": "不限 Nijiiro ID",
     "nijiiroYes": "有 Nijiiro ID",
     "nijiiroNo": "无 Nijiiro ID",
-    "nijiiroId": "Nijiiro ID",
     "nijiiroIdWithValue": "Nijiiro ID {{id}}",
-    "officialId": "官方 ID",
     "none": "无",
     "record": "数据库记录",
     "files": "文件",

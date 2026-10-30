@@ -12,7 +12,8 @@
     "myCharts": "アップロードした譜面",
     "publishChart": "譜面をアップロード",
     "noChartsYet": "データベースにまだ譜面がありません",
-    "createdAt": "追加日時"
+    "createdAt": "追加日時",
+    "chartsNav": "譜面を探す"
   },
   "common": {
     "siteTitle": "OurTaiko Database · 公式譜面"
@@ -25,7 +26,6 @@
     "CHART_FILES_MISSING": "この曲にはまだ譜面ファイルがありません。"
   },
   "db": {
-    "browse": "譜面を探す",
     "upload": "譜面をアップロード",
     "searchPlaceholder": "曲名、訳名、Nijiiro ID、公式 ID で検索",
     "orderLatest": "新着順",
@@ -38,9 +38,7 @@
     "nijiiroAny": "Nijiiro ID の有無を問わない",
     "nijiiroYes": "Nijiiro ID あり",
     "nijiiroNo": "Nijiiro ID なし",
-    "nijiiroId": "Nijiiro ID",
     "nijiiroIdWithValue": "Nijiiro ID {{id}}",
-    "officialId": "公式 ID",
     "none": "なし",
     "record": "データベース記録",
     "files": "ファイル",
