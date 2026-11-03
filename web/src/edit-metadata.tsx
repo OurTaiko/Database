@@ -8,7 +8,9 @@ import { Label } from '@sitekit/components/ui/label'
 import { Textarea } from '@sitekit/components/ui/textarea'
 import { endpoints } from '@sitekit/api/endpoints'
 import { AudioPlayer } from '@sitekit/components/audio-player'
-import { api, jsonRequest } from '@sitekit/api/client'
+import { api, jsonRequest, replaceMovie } from '@sitekit/api/client'
+import { MovieSettings, movieChanges, movieDraft } from '@sitekit/components/movie-settings'
+import { useNotification } from '@sitekit/notification-context'
 import type { Chart, Locale } from './api/types'
 import { CategoryPicker } from '@sitekit/categories'
 import { cn } from '@sitekit/lib/utils'
@@ -38,7 +40,8 @@ export function parseBpm(value: string): number | null | undefined {
 }
 
 // Edits what the database says about a chart. The stored TJA and audio are not
-// changed here. The title, subtitle and preview range are the database's at
+// changed here, but for the background movie and MOVIEOFFSET (R057), which are
+// rewritten in it. The title, subtitle and preview range are the database's at
 // any time (R042, R045); the BPM and difficulties are the TJA's, so the BPM is
 // editable only on a song registered without files.
 export function EditMetadata({
@@ -64,6 +67,9 @@ export function EditMetadata({
   const [subtitles, setSubtitles] = useState(chart.subtitleTranslations)
   const [demoStart, setDemoStart] = useState(String(chart.demoStart))
   const [demoEnd, setDemoEnd] = useState(String(chart.demoEnd))
+  const [movie, setMovie] = useState(() => movieDraft(chart))
+  const movieEdit = movieChanges(chart, movie)
+  const { notify } = useNotification()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const submit = async (event: FormEvent) => {
@@ -97,9 +103,16 @@ export function EditMetadata({
       setError(t('messages.previewRangeInvalid'))
       return
     }
+    if (chart.hasFiles && movieEdit.invalid) {
+      setError(t('messages.movieOffsetInvalid'))
+      return
+    }
     setBusy(true)
     setError('')
     try {
+      // The movie first: a rejected file leaves the other edits unsaved.
+      if (chart.hasFiles && movieEdit.file)
+        await replaceMovie(chart.id, movieEdit.file, movieEdit.offset, csrf)
       const translations = (values: Partial<Record<Locale, string>>) =>
         Object.fromEntries(locales.map((locale) => [locale, values[locale]?.trim() || null]))
       onSaved(
@@ -114,6 +127,9 @@ export function EditMetadata({
               ...(chart.hasFiles ? {} : { bpm: parsedBpm }),
               // The preview range needs the audio; it is sent only when changed.
               ...(chart.hasFiles && demoChanged ? { demoStart: start, demoEnd: end } : {}),
+              ...(chart.hasFiles && !movieEdit.file && movieEdit.offset !== undefined
+                ? { movieOffset: movieEdit.offset }
+                : {}),
               nijiiroId: nijiiro,
               officialId: official || null,
               categoryIds,
@@ -125,6 +141,7 @@ export function EditMetadata({
           ),
         ),
       )
+      if (chart.hasFiles && movieEdit.file) notify(t('messages.movieSubmitted'), 'info')
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -242,6 +259,9 @@ export function EditMetadata({
               disabled={busy || Number(demoEnd) > 1215}
             />
           </fieldset>
+        )}
+        {chart.hasFiles && (
+          <MovieSettings chart={chart} draft={movie} onChange={setMovie} disabled={busy} />
         )}
         <CategoryPicker value={categoryIds} onChange={setCategoryIds} disabled={busy} />
         <fieldset className="space-y-3 [&>legend]:mb-2 [&>legend]:text-sm [&>legend]:font-medium">

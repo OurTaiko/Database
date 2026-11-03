@@ -180,6 +180,78 @@ func TestBackgroundMovies(t *testing.T) {
 		t.Fatal("background upload did not store the movie", err)
 	}
 
+	// The offset alone, as on Fanmade: the stored TJA is rewritten and the old one released.
+	released := func(digest string) {
+		t.Helper()
+		var n int
+		if err := s.DB.QueryRow(ctx, `SELECT count(*) FROM chart_resources WHERE sha256=$1`, digest).Scan(&n); err != nil || n != 0 {
+			t.Fatal("replaced file not released", digest, n, err)
+		}
+	}
+	if code := w.c.do("owner", "PATCH", w.chart(w.song), `{"movieOffset":1300}`, nil); code != 422 {
+		t.Fatal("offset out of range", code)
+	}
+	beforeTJA := c.TJAHash
+	var shifted Chart
+	if code := w.c.do("owner", "PATCH", w.chart(w.song), `{"movieOffset":-2.25}`, &shifted); code != 200 || shifted.MovieOffset != -2.25 || shifted.MovieHash != c.MovieHash || len(shifted.Difficulties) != 1 {
+		t.Fatal("offset not set", code, shifted.MovieOffset)
+	}
+	if !strings.Contains(storedTJA(), "\nBGMOVIE:"+c.MovieHash+".mp4\nMOVIEOFFSET:-2.25\n") {
+		t.Fatal("stored TJA lacks the offset", storedTJA())
+	}
+	released(beforeTJA)
+	// The movie alone, with its offset; a bad one changes nothing.
+	sendMovie := func(offset string, name string, data []byte) *httptest.ResponseRecorder {
+		t.Helper()
+		var body bytes.Buffer
+		form := multipart.NewWriter(&body)
+		if offset != "" {
+			form.WriteField("movieOffset", offset)
+		}
+		if data != nil {
+			part, _ := form.CreateFormFile("movie", name)
+			part.Write(data)
+		}
+		form.Close()
+		r := httptest.NewRequest("PUT", w.chart(w.song)+"/movie", &body)
+		r.Header.Set("Content-Type", form.FormDataContentType())
+		r.Header.Set("Origin", "http://localhost")
+		r.Header.Set("X-CSRF-Token", "csrf")
+		r.RemoteAddr = fmt.Sprintf("10.9.%d.1:1234", w.c.n.Add(1)&255)
+		r.AddCookie(&http.Cookie{Name: "ourtaiko_db_session", Value: w.c.tokens["owner"]})
+		rec := httptest.NewRecorder()
+		w.c.handler.ServeHTTP(rec, r)
+		return rec
+	}
+	if code := sendMovie("", "", nil).Code; code != 400 {
+		t.Fatal("no movie", code)
+	}
+	if code := sendMovie("x", "o.mp4", movieData).Code; code != 422 {
+		t.Fatal("bad offset", code)
+	}
+	if rec := sendMovie("", "o.mp4", []byte("not a video")); rec.Code != 422 || !strings.Contains(rec.Body.String(), "MOVIE_INVALID") {
+		t.Fatal("bad movie", rec.Code, rec.Body.String())
+	}
+	other := filepath.Join(dir, "b.mp4")
+	if out, err := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=duration=1:size=320x240:rate=30", "-c:v", "libx264", "-pix_fmt", "yuv420p", other).CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+	otherData, err := os.ReadFile(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shifted, _ = s.chart(ctx, w.song)
+	swapped := decode(sendMovie("0.75", "any name.webm", otherData))
+	if swapped.MovieHash == "" || swapped.MovieHash == c.MovieHash || swapped.MovieOffset != 0.75 || swapped.Title != c.Title {
+		t.Fatal("movie not replaced", swapped.MovieHash, swapped.MovieOffset)
+	}
+	if !strings.Contains(storedTJA(), "\nBGMOVIE:"+swapped.MovieHash+".mp4\nMOVIEOFFSET:0.75\n") {
+		t.Fatal("stored TJA does not name the new movie", storedTJA())
+	}
+	released(c.MovieHash)
+	released(shifted.TJAHash)
+	c = swapped
+
 	// A new chart (only administrators upload) goes through the same job: its audio decoded,
 	// its movie stored.
 	oggData, err := os.ReadFile("../../kit/audio/testdata/vorbis.ogg")

@@ -508,6 +508,9 @@ type metadataPatch struct {
 	// The preview range in seconds, within the audio; a chart without files has none to set.
 	DemoStart json.RawMessage `json:"demoStart"`
 	DemoEnd   json.RawMessage `json:"demoEnd"`
+	// MOVIEOFFSET in seconds, for a chart with a movie; it is rewritten in the stored TJA,
+	// where players read it.
+	MovieOffset json.RawMessage `json:"movieOffset"`
 	// Every block's maker, as [{course, side, maker}], as on Fanmade.
 	DifficultyMakers json.RawMessage `json:"difficultyMakers"`
 }
@@ -657,6 +660,17 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	movieOffset := c.MovieOffset
+	if len(patch.MovieOffset) > 0 {
+		if isNull(patch.MovieOffset) || json.Unmarshal(patch.MovieOffset, &movieOffset) != nil || !video.ValidOffset(movieOffset) {
+			problem(w, 422, "TJA_MOVIE_OFFSET_INVALID", "MOVIEOFFSET 必须为秒数，绝对值不超过 1200")
+			return
+		}
+		if c.MovieHash == "" {
+			problem(w, 422, "MOVIE_NOT_FOUND", "该谱面没有背景视频，无法设置 MOVIEOFFSET")
+			return
+		}
+	}
 	if !patchTranslations(patch.TitleTranslations, c.TitleTranslations) || !patchTranslations(patch.SubtitleTranslations, c.SubtitleTranslations) {
 		problem(w, 422, "TRANSLATIONS_INVALID", "译名必须为 en / ja / zh / ko 到不超过 500 字节文本的映射")
 		return
@@ -697,9 +711,29 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	var retired []int64
+	if movieOffset != c.MovieOffset {
+		// The UPDATE above holds the row; the movie is read again under it.
+		var movieSHA string
+		if e = tx.QueryRow(r.Context(), `SELECT COALESCE(mf.sha256,'') FROM charts c LEFT JOIN chart_resources mf ON mf.id=c.movie_file WHERE c.id=$1`, c.ID).Scan(&movieSHA); e != nil {
+			internal(w, e)
+			return
+		}
+		if movieSHA == "" {
+			problem(w, 422, "MOVIE_NOT_FOUND", "该谱面没有背景视频，无法设置 MOVIEOFFSET")
+			return
+		}
+		if retired, e = s.rewriteMovie(r.Context(), tx, c.ID, movieSHA, nil, movieOffset); e != nil {
+			internal(w, e)
+			return
+		}
+	}
 	if e = tx.Commit(r.Context()); e != nil {
 		internal(w, e)
 		return
+	}
+	if e = s.releaseFiles(r.Context(), retired); e != nil {
+		log.Printf("replaced TJA cleanup pending: %v", e)
 	}
 	if demoStart != c.DemoStart || demoEnd != c.DemoEnd {
 		s.previewAfter(r.Context(), c.ID, "")
