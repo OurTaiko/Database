@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,7 +152,11 @@ func TestDifficultyConstants(t *testing.T) {
 	if _, err = s.DB.Exec(ctx, `DELETE FROM difficulty_constants`); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.backfillContentHashes(ctx, "v1:", constants.Version); err != nil {
+	var prefix string
+	if err = s.DB.QueryRow(ctx, `SELECT split_part(content_hash,':',1)||':' FROM chart_difficulties WHERE chart_id=$1 LIMIT 1`, w.song).Scan(&prefix); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.backfillContentHashes(ctx, prefix, constants.Version); err != nil {
 		t.Fatal(err)
 	}
 	backfilled, at := stored()
@@ -160,6 +165,68 @@ func TestDifficultyConstants(t *testing.T) {
 			t.Fatalf("backfill %s: %+v, want %+v; update_at %v → %v", key, b, r, updated, at)
 		}
 	}
+
+	// Migration 020, for the move to algorithm v2: blocks hashed by an older algorithm (here
+	// "v0:") get the tool's hash from the backfill; their scores stay the latest, their 段位
+	// songs valid, and the chart's update_at where it was.
+	hashes := func() map[string]string {
+		t.Helper()
+		rows, err := s.DB.Query(ctx, `SELECT course,content_hash FROM chart_difficulties WHERE chart_id=$1`, w.song)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		out := map[string]string{}
+		for rows.Next() {
+			var course, value string
+			if err = rows.Scan(&course, &value); err != nil {
+				t.Fatal(err)
+			}
+			out[course] = value
+		}
+		return out
+	}
+	current := hashes()
+	if _, err = s.DB.Exec(ctx, `INSERT INTO scores(id,user_id,difficulty_id,good,ok,bad,score,drumroll,max_combo,payload_digest)
+ SELECT 'kept-'||course,$2,id,1,0,0,1000,0,1,repeat('a',64) FROM chart_difficulties WHERE chart_id=$1`, w.song, testUsers["owner"].ID); err != nil {
+		t.Fatal(err)
+	}
+	danID := ID()
+	if _, err = s.DB.Exec(ctx, `INSERT INTO dan_courses(id,owner_id,title,code,exams) VALUES($2,$1,'{"en":"Kept"}','SHODAN','[]')`, testUsers["owner"].ID, danID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.DB.Exec(ctx, `INSERT INTO dan_course_songs(course_id,position,chart_id,course,side) VALUES($2,0,$1,'Hard','single'),($2,1,$1,'Oni','single')`, w.song, danID); err != nil {
+		t.Fatal(err)
+	}
+	kept := func() (latest, valid int) {
+		t.Helper()
+		if err = s.DB.QueryRow(ctx, `SELECT (SELECT count(*) FROM scores WHERE id LIKE 'kept-%' AND is_latest),(SELECT count(*) FROM dan_course_songs WHERE chart_id=$1 AND valid)`, w.song).Scan(&latest, &valid); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	_, updated = stored()
+	if _, err = s.DB.Exec(ctx, `UPDATE chart_difficulties SET content_hash='v0:'||split_part(content_hash,':',2) WHERE chart_id=$1`, w.song); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.backfillContentHashes(ctx, prefix, constants.Version); err != nil {
+		t.Fatal(err)
+	}
+	_, at = stored()
+	if latest, valid := kept(); !maps.Equal(hashes(), current) || latest != 2 || valid != 2 || !at.Equal(updated) {
+		t.Fatalf("after a new algorithm: hashes %v (want %v), %d latest scores, %d valid songs, update_at %v → %v", hashes(), current, latest, valid, updated, at)
+	}
+	// Another hash of the same algorithm is another chart: that block's scores and songs go.
+	if _, err = s.DB.Exec(ctx, `UPDATE chart_difficulties SET content_hash=$2||repeat('0',64) WHERE chart_id=$1 AND course='Hard'`, w.song, prefix); err != nil {
+		t.Fatal(err)
+	}
+	if latest, valid := kept(); latest != 1 || valid != 1 {
+		t.Fatalf("after another hash: %d latest scores, %d valid songs", latest, valid)
+	}
+	if _, err = s.DB.Exec(ctx, `UPDATE chart_difficulties SET content_hash=$2 WHERE chart_id=$1 AND course='Hard'`, w.song, current["Hard"]); err != nil {
+		t.Fatal(err)
+	}
+	_, updated = stored()
 	// Storing the same reading again changes nothing.
 	setDifficulties()
 	if _, at := stored(); !at.Equal(updated) {
