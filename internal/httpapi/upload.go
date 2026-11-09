@@ -86,6 +86,9 @@ func identifiers(nijiiro, official string) (*int32, *string, bool) {
 // TJA they are ignored, as the file is the source of those.
 var uploadFields = []string{"difficultyMakers", "description", "categoryIds", "nijiiroId", "officialId", "title", "subtitle", "bpm", "demoStart", "demoEnd"}
 
+// A new chart also names the co-creators to invite; an existing one invites from its page.
+var newUploadFields = append(append([]string{}, uploadFields...), "collaboratorIds")
+
 // receiveUploadForm stages the multipart files tja, audio and cover of a
 // submission in dir and collects the text fields named in allowed. On a bad
 // request it has answered and returns false.
@@ -221,7 +224,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			os.RemoveAll(dir)
 		}
 	}()
-	files, fields, ok := receiveUploadForm(w, r, dir, uploadFields)
+	files, fields, ok := receiveUploadForm(w, r, dir, newUploadFields)
 	if !ok {
 		return
 	}
@@ -241,9 +244,13 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		problem(w, 422, "DESCRIPTION_INVALID", "说明包含无效字符")
 		return
 	}
+	collaborators, ok := s.uploadCollaborators(w, r, fields["collaboratorIds"], u.User.ID)
+	if !ok {
+		return
+	}
 	tf, af, cf, mv := files["tja"], files["audio"], files["cover"], files["movie"]
 	if tf == nil && af == nil && mv == nil {
-		s.createSong(w, r, u, key, fields, cf, categoryIDs, flags, nijiiroID, officialID)
+		s.createSong(w, r, u, key, fields, cf, categoryIDs, flags, nijiiroID, officialID, collaborators)
 		return
 	}
 	if tf == nil || af == nil {
@@ -271,9 +278,13 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 			parts = append(parts, f.name, f.sha)
 		}
 	}
+	// Requests without co-creators keep the digest they always had.
+	if len(collaborators) > 0 {
+		parts = append(parts, "collaborators", strings.Join(collaborators, ","))
+	}
 	job := &uploadJob{
 		user: u.User.ID, key: key, dir: dir, tja: tf, audio: af, cover: cf, movie: mv, normalized: data, meta: meta,
-		description: description, flags: flags, nijiiroID: nijiiroID, officialID: officialID, fields: fields, keepMovie: keepMovie,
+		description: description, flags: flags, nijiiroID: nijiiroID, officialID: officialID, fields: fields, keepMovie: keepMovie, collaborators: collaborators,
 		// RFC 7240: the client asks not to wait for processing.
 		async: strings.Contains(strings.ToLower(r.Header.Get("Prefer")), "respond-async"), done: make(chan uploadResult, 1),
 	}

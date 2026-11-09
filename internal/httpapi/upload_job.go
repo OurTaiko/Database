@@ -31,6 +31,7 @@ type uploadJob struct {
 	flags                    CategoryFlags
 	nijiiroID                *int32
 	officialID               *string
+	collaborators            []string          // users a new chart invites as co-creators once published
 	fields                   map[string]string // the sent preview range, read once the audio is
 	keepMovie, keepTitles    bool
 	movieOnly                bool // sets only the background movie of existingID, see replaceMovie
@@ -261,6 +262,9 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 		return failed(err)
 	}
 	if err = database.SetDifficulties(ctx, tx, id, j.meta.Difficulties); err != nil {
+		return failed(err)
+	}
+	if err = inviteOnPublish(ctx, tx, id, j.user, j.collaborators); err != nil {
 		return failed(err)
 	}
 	audioSHA := j.audioHash

@@ -36,7 +36,7 @@ func songBPM(raw string) (float64, bool) {
 // categories, notes and a cover. Blocks, duration and the files come later
 // with PUT /charts/{id}/files. Called by upload once the form is read; the
 // category and identifier fields are already validated.
-func (s *Server) createSong(w http.ResponseWriter, r *http.Request, u session, key string, fields map[string]string, cf *stagedFile, categoryIDs []string, flags CategoryFlags, nijiiroID *int32, officialID *string) {
+func (s *Server) createSong(w http.ResponseWriter, r *http.Request, u session, key string, fields map[string]string, cf *stagedFile, categoryIDs []string, flags CategoryFlags, nijiiroID *int32, officialID *string, collaborators []string) {
 	title := strings.TrimSpace(fields["title"])
 	subtitle := strings.TrimSpace(fields["subtitle"])
 	if title == "" || !validDisplayText(title) || !validDisplayText(subtitle) {
@@ -65,6 +65,10 @@ func (s *Server) createSong(w http.ResponseWriter, r *http.Request, u session, k
 		coverSHA = hash(string(coverData))
 	}
 	payload := hash(strings.Join([]string{"song", title, subtitle, fields["bpm"], coverSHA, description, strings.Join(categoryIDs, ","), fields["nijiiroId"], fields["officialId"]}, "\n"))
+	// Requests without co-creators keep the digest they always had.
+	if len(collaborators) > 0 {
+		payload = hash(payload + "\ncollaborators\n" + strings.Join(collaborators, ","))
+	}
 
 	ctx := context.WithoutCancel(r.Context())
 	tx, e := s.DB.Begin(ctx)
@@ -117,6 +121,10 @@ func (s *Server) createSong(w http.ResponseWriter, r *http.Request, u session, k
 		return
 	}
 	if _, e = tx.Exec(ctx, `UPDATE upload_requests SET chart_id=$3 WHERE user_id=$1 AND idempotency_key=$2`, u.User.ID, key, id); e != nil {
+		internal(w, e)
+		return
+	}
+	if e = inviteOnPublish(ctx, tx, id, u.User.ID, collaborators); e != nil {
 		internal(w, e)
 		return
 	}
