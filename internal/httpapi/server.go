@@ -145,6 +145,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/users/{id}/scores", s.userScores)
 	mux.HandleFunc("GET /api/v1/users/{id}/comments", s.userComments)
 	mux.HandleFunc("GET /api/v1/charts/{id}/leaderboard", s.leaderboard)
+	mux.HandleFunc("GET /api/v1/scores/{id}/replay", s.scoreReplay)
 	mux.HandleFunc("PUT /api/v1/charts/{id}/vote", s.voteChart)
 	mux.HandleFunc("GET /api/v1/charts/{id}/comments", s.chartComments)
 	mux.HandleFunc("POST /api/v1/charts/{id}/comments", s.createComment)
