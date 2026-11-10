@@ -99,10 +99,56 @@ func TestScoreReplayIsReadBack(t *testing.T) {
 			t.Fatal("the score list must mark the plays with a recording", play.ID, play.HasReplay)
 		}
 	}
+	// The public replay list: kept recordings on the chart's current files, with the song's
+	// title and the player's nickname.
+	type listing struct {
+		Items []struct {
+			Score
+			Title    string `json:"title"`
+			Level    int    `json:"level"`
+			Nickname string `json:"nickname"`
+		} `json:"items"`
+		Total    int    `json:"total"`
+		Page     int    `json:"page"`
+		PageSize int    `json:"pageSize"`
+		Sort     string `json:"sort"`
+	}
+	var list listing
+	if code := c.do("", "GET", "/api/v1/replays", "", &list); code != 200 || list.Total != 1 || len(list.Items) != 1 || list.Items[0].ID != kept.ID ||
+		list.Items[0].SongID != w.song || list.Items[0].Course != "Oni" || list.Items[0].Level != 5 || list.Items[0].Title == "" || list.Items[0].Nickname == "" || list.Sort != "recent" || list.PageSize != 20 {
+		t.Fatal(code, list)
+	}
+	var empty listing
+	if code := c.do("", "GET", "/api/v1/replays?course=Easy", "", &empty); code != 200 || empty.Total != 0 || len(empty.Items) != 0 {
+		t.Fatal("course filter", code, empty)
+	}
+	empty = listing{}
+	if code := c.do("", "GET", "/api/v1/replays?sort=score&page=9", "", &empty); code != 200 || empty.Total != 1 || len(empty.Items) != 0 || empty.Page != 9 {
+		t.Fatal("past the last page", code, empty)
+	}
+	for _, bad := range []string{"?sort=level", "?page=0", "?course=oni"} {
+		if code := c.do("", "GET", "/api/v1/replays"+bad, "", nil); code != 400 {
+			t.Fatal(bad, code)
+		}
+	}
+	if _, err := s.DB.Exec(ctx, `UPDATE scores SET is_latest=false WHERE id=$1`, kept.ID); err != nil {
+		t.Fatal(err)
+	}
+	empty = listing{}
+	if code := c.do("", "GET", "/api/v1/replays", "", &empty); code != 200 || empty.Total != 0 {
+		t.Fatal("a play of replaced files must not be listed", code, empty)
+	}
+	if _, err := s.DB.Exec(ctx, `UPDATE scores SET is_latest=true WHERE id=$1`, kept.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.DB.Exec(ctx, `UPDATE charts SET status='hidden' WHERE id=$1`, w.song); err != nil {
 		t.Fatal(err)
 	}
 	if code := c.do("", "GET", "/api/v1/scores/"+kept.ID+"/replay", "", nil); code != 404 {
 		t.Fatal("an unpublished chart's recordings are not read", code)
+	}
+	empty = listing{}
+	if code := c.do("", "GET", "/api/v1/replays", "", &empty); code != 200 || empty.Total != 0 {
+		t.Fatal("a hidden chart's plays must not be listed", code, empty)
 	}
 }
