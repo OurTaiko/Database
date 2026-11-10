@@ -126,7 +126,19 @@ func TestScoreReplayIsReadBack(t *testing.T) {
 	if code := c.do("", "GET", "/api/v1/replays?sort=score&page=9", "", &empty); code != 200 || empty.Total != 1 || len(empty.Items) != 0 || empty.Page != 9 {
 		t.Fatal("past the last page", code, empty)
 	}
-	for _, bad := range []string{"?sort=level", "?page=0", "?course=oni"} {
+	// categoryId narrows to the songs of one category (Game here).
+	if _, err := s.DB.Exec(ctx, `UPDATE charts SET category_flags=$2 WHERE id=$1`, w.song, int(CategoryGame)); err != nil {
+		t.Fatal(err)
+	}
+	var inCategory listing
+	if code := c.do("", "GET", "/api/v1/replays?categoryId=game", "", &inCategory); code != 200 || inCategory.Total != 1 || inCategory.Items[0].ID != kept.ID {
+		t.Fatal("category filter", code, inCategory)
+	}
+	empty = listing{}
+	if code := c.do("", "GET", "/api/v1/replays?categoryId=pop&course=Oni", "", &empty); code != 200 || empty.Total != 0 {
+		t.Fatal("another category", code, empty)
+	}
+	for _, bad := range []string{"?sort=level", "?page=0", "?course=oni", "?categoryId=nope"} {
 		if code := c.do("", "GET", "/api/v1/replays"+bad, "", nil); code != 400 {
 			t.Fatal(bad, code)
 		}
