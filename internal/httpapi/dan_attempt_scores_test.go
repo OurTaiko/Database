@@ -82,22 +82,43 @@ func TestDanAttemptNamesItsScores(t *testing.T) {
 	}
 	attempt("dan-attempt-key-0001", `,"scoreKeys":["dan-score-key-0002"]`, 409)
 	attempt("dan-attempt-key-0002", `,"scoreKeys":[]`, 422)
-	// A game that names no keys: the score since the attempt before, and not that one's again.
+	// A game that names no keys sends the attempt between its songs' scores: they are looked for
+	// by time, when the attempt comes and as a score follows it. Attempts are minutes apart in
+	// play; the rows so far are moved back to say so.
+	age := func() {
+		t.Helper()
+		if _, err := s.DB.Exec(ctx, `UPDATE dan_attempts SET submitted_at=submitted_at-interval '10 minutes'`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.DB.Exec(ctx, `UPDATE scores SET submitted_at=submitted_at-interval '10 minutes'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	age()
 	second := play("dan-score-key-0002", 2000)
 	if got := attempt("dan-attempt-key-0003", "", 200); got != second {
 		t.Fatal("found by time", got, second)
 	}
+	age()
 	if got := attempt("dan-attempt-key-0004", "", 200); got != "-" {
-		t.Fatal("nothing new", got)
+		t.Fatal("the score of the attempt before is not taken again", got)
 	}
-	// The migration's own statement over every attempt: the scores that came between the attempt
-	// before and itself, so the one that arrived after attempt 0001 is not found.
-	if _, err := s.DB.Exec(ctx, `UPDATE dan_attempts SET songs_played = dan_attempt_scores(id) WHERE cardinality(songs_played) > 0`); err != nil {
+	age()
+	if got := attempt("dan-attempt-key-0005", "", 200); got != "-" {
+		t.Fatal("before its score", got)
+	}
+	third := play("dan-score-key-0003", 3000)
+	if got := attempt("dan-attempt-key-0005", "", 200); got != third {
+		t.Fatal("the score that follows the attempt joins it", got, third)
+	}
+	// Migration 025's own statement: the attempts without keys are looked for again, the keyed
+	// one keeps its score.
+	if _, err := s.DB.Exec(ctx, `UPDATE dan_attempts SET songs_played = dan_attempt_scores(id) WHERE cardinality(songs_played) > 0 AND cardinality(score_keys) = 0`); err != nil {
 		t.Fatal(err)
 	}
 	var filled string
 	if err := s.DB.QueryRow(ctx, `SELECT string_agg(right(idempotency_key,1)||'='||array_to_string(songs_played,',','-'),' ' ORDER BY idempotency_key) FROM dan_attempts`).Scan(&filled); err != nil ||
-		filled != "1=- 3="+second+" 4=-" {
+		filled != "1="+first+" 3="+second+" 4=- 5="+third {
 		t.Fatal("filled in", err, filled)
 	}
 	var count, keys int
