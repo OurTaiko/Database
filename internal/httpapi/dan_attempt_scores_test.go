@@ -64,12 +64,18 @@ func TestDanAttemptNamesItsScores(t *testing.T) {
 	post := func(key, body string, status int) reply {
 		t.Helper()
 		var out reply
+		send("/api/v1/game/dan-results", key, body, status, &out)
+		return out
+	}
+	old := func(key, body string, status int) reply {
+		t.Helper()
+		var out reply
 		send("/api/v1/game/dan-attempts", key, body, status, &out)
 		return out
 	}
 	attempt := func(key, extra string, status int) string {
 		t.Helper()
-		out := post(key, `{"courseId":"`+course+`","verdict":1,"songsPlayed":1`+extra+`}`, status)
+		out := old(key, `{"courseId":"`+course+`","verdict":1,"songsPlayed":1`+extra+`}`, status)
 		if status != 200 {
 			return ""
 		}
@@ -108,6 +114,19 @@ func TestDanAttemptNamesItsScores(t *testing.T) {
 	if err := s.DB.QueryRow(ctx, `SELECT count(*) FROM scores`).Scan(&count); err != nil || count != 1 {
 		t.Fatal("one score, once", err, count)
 	}
+	// Each address takes its own form; dan-attempts, what older games send, says it is deprecated.
+	old("dan-attempt-key-0009", together, 422)
+	post("dan-attempt-key-0009", `{"courseId":"`+course+`","verdict":1,"songsPlayed":1}`, 422)
+	deprecated := httptest.NewRequest("POST", "/api/v1/game/dan-attempts", strings.NewReader(`{"courseId":"`+course+`","verdict":0,"songsPlayed":0}`))
+	deprecated.Header.Set("Content-Type", "application/json")
+	deprecated.Header.Set("Authorization", "Bearer "+token)
+	deprecated.Header.Set("Idempotency-Key", "dan-attempt-key-0009")
+	deprecated.RemoteAddr = "10.8.1.1:1234"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, deprecated)
+	if rec.Code != 200 || rec.Header().Get("Deprecation") != "@1794268800" || !strings.Contains(rec.Header().Get("Link"), "/api/v1/game/dan-results") {
+		t.Fatal("deprecated", rec.Code, rec.Header())
+	}
 	// An older game uploads the scores on their own, the attempt between them: they are looked for
 	// by time, when the attempt comes and as a score follows it. Attempts are minutes apart in
 	// play; the rows so far are moved back to say so.
@@ -144,7 +163,7 @@ func TestDanAttemptNamesItsScores(t *testing.T) {
 	}
 	var filled string
 	if err := s.DB.QueryRow(ctx, `SELECT string_agg(right(idempotency_key,1)||'='||array_to_string(songs_played,',','-'),' ' ORDER BY idempotency_key) FROM dan_attempts`).Scan(&filled); err != nil ||
-		filled != "1="+first+" 2=-,- 3="+second+" 4=- 5="+third {
+		filled != "1="+first+" 2=-,- 3="+second+" 4=- 5="+third+" 9=" {
 		t.Fatal("filled in", err, filled)
 	}
 }
