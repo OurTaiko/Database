@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// A 段位 attempt keeps the scores of its songs (024, as Fanmade 056): by the keys the game
-// uploads them with, or for a game that names none by time.
+// A 段位 attempt keeps the scores of its songs (024 and 025, as Fanmade 056 and 057): the game
+// sends them with it, or for an older game they are looked for by time.
 func TestDanAttemptNamesItsScores(t *testing.T) {
 	w := interactionFixture(t)
 	s := w.s
@@ -57,32 +57,58 @@ func TestDanAttemptNamesItsScores(t *testing.T) {
 		send("/api/v1/game/scores", key, fmt.Sprintf(`{"difficultyId":%d,"good":5,"ok":0,"bad":0,"score":%d,"drumroll":0,"max_combo":5}`, oni, points), 201, &score)
 		return score.ID
 	}
+	type reply struct {
+		Attempt DanAttempt
+		Scores  []*Score
+	}
+	post := func(key, body string, status int) reply {
+		t.Helper()
+		var out reply
+		send("/api/v1/game/dan-attempts", key, body, status, &out)
+		return out
+	}
 	attempt := func(key, extra string, status int) string {
 		t.Helper()
-		var reply struct{ Attempt DanAttempt }
-		send("/api/v1/game/dan-attempts", key, `{"courseId":"`+course+`","verdict":1,"songsPlayed":1`+extra+`}`, status, &reply)
+		out := post(key, `{"courseId":"`+course+`","verdict":1,"songsPlayed":1`+extra+`}`, status)
 		if status != 200 {
 			return ""
 		}
-		if reply.Attempt.SongsPlayed != 1 || len(reply.Attempt.ScoreIDs) != 1 {
-			t.Fatal("attempt", reply.Attempt)
+		if out.Attempt.SongsPlayed != 1 || len(out.Attempt.ScoreIDs) != 1 {
+			t.Fatal("attempt", out.Attempt)
 		}
-		if reply.Attempt.ScoreIDs[0] == nil {
+		if out.Attempt.ScoreIDs[0] == nil {
 			return "-"
 		}
-		return *reply.Attempt.ScoreIDs[0]
+		return *out.Attempt.ScoreIDs[0]
 	}
-	// No score yet; it joins the attempt when it comes.
-	if got := attempt("dan-attempt-key-0001", `,"scoreKeys":["dan-score-key-0001"]`, 200); got != "-" {
-		t.Fatal("before the score", got)
+	// The game sends the songs' scores with the attempt: saved first, and the attempt has their ids.
+	var blockHash string
+	if err := s.DB.QueryRow(ctx, `UPDATE chart_difficulties SET content_hash='v2:'||repeat('a',64) WHERE id=$1 RETURNING content_hash`, oni).Scan(&blockHash); err != nil {
+		t.Fatal(err)
 	}
-	first := play("dan-score-key-0001", 1000)
-	if got := attempt("dan-attempt-key-0001", `,"scoreKeys":["dan-score-key-0001"]`, 200); got != first {
-		t.Fatal("after the score", got, first)
+	sent := func(points int, extra string) string {
+		return fmt.Sprintf(`{"difficultyId":%d,"good":5,"ok":0,"bad":0,"score":%d,"drumroll":0,"max_combo":5%s}`, oni, points, extra)
 	}
-	attempt("dan-attempt-key-0001", `,"scoreKeys":["dan-score-key-0002"]`, 409)
-	attempt("dan-attempt-key-0002", `,"scoreKeys":[]`, 422)
-	// A game that names no keys sends the attempt between its songs' scores: they are looked for
+	together := `{"courseId":"` + course + `","verdict":1,"scores":[` + sent(1000, `,"chartHash":"`+blockHash+`","replay_data":`+testReplayV2) + `]}`
+	made := post("dan-attempt-key-0001", together, 200)
+	if len(made.Scores) != 1 || made.Scores[0] == nil || made.Scores[0].Score != 1000 || !made.Scores[0].HasReplay || len(made.Attempt.ScoreIDs) != 1 || *made.Attempt.ScoreIDs[0] != made.Scores[0].ID {
+		t.Fatal("the attempt and its score", made)
+	}
+	first := made.Scores[0].ID
+	if again := post("dan-attempt-key-0001", together, 200); *again.Attempt.ScoreIDs[0] != first || again.Scores[0].ID != first {
+		t.Fatal("retry", again)
+	}
+	post("dan-attempt-key-0001", strings.Replace(together, `"score":1000`, `"score":1001`, 1), 409)
+	post("dan-attempt-key-0002", `{"courseId":"`+course+`","verdict":1,"scores":[{"difficultyId":`+fmt.Sprint(oni)+`}]}`, 422)
+	// Played on other files, or no score for the song: left out, the attempt kept.
+	if out := post("dan-attempt-key-0002", `{"courseId":"`+course+`","verdict":0,"scores":[`+sent(5, `,"chartHash":"v2:stale"`)+`,null]}`, 200); len(out.Attempt.ScoreIDs) != 2 || out.Attempt.ScoreIDs[0] != nil || out.Attempt.ScoreIDs[1] != nil || out.Scores[0] != nil {
+		t.Fatal("left out", out)
+	}
+	var count int
+	if err := s.DB.QueryRow(ctx, `SELECT count(*) FROM scores`).Scan(&count); err != nil || count != 1 {
+		t.Fatal("one score, once", err, count)
+	}
+	// An older game uploads the scores on their own, the attempt between them: they are looked for
 	// by time, when the attempt comes and as a score follows it. Attempts are minutes apart in
 	// play; the rows so far are moved back to say so.
 	age := func() {
@@ -111,18 +137,14 @@ func TestDanAttemptNamesItsScores(t *testing.T) {
 	if got := attempt("dan-attempt-key-0005", "", 200); got != third {
 		t.Fatal("the score that follows the attempt joins it", got, third)
 	}
-	// Migration 025's own statement: the attempts without keys are looked for again, the keyed
-	// one keeps its score.
-	if _, err := s.DB.Exec(ctx, `UPDATE dan_attempts SET songs_played = dan_attempt_scores(id) WHERE cardinality(songs_played) > 0 AND cardinality(score_keys) = 0`); err != nil {
+	// Looking again over the attempts whose scores came on their own (migration 025 did so over
+	// those made before) finds the same.
+	if _, err := s.DB.Exec(ctx, `UPDATE dan_attempts SET songs_played = dan_attempt_scores(id) WHERE right(idempotency_key,1) IN ('3','4','5')`); err != nil {
 		t.Fatal(err)
 	}
 	var filled string
 	if err := s.DB.QueryRow(ctx, `SELECT string_agg(right(idempotency_key,1)||'='||array_to_string(songs_played,',','-'),' ' ORDER BY idempotency_key) FROM dan_attempts`).Scan(&filled); err != nil ||
-		filled != "1="+first+" 3="+second+" 4=- 5="+third {
+		filled != "1="+first+" 2=-,- 3="+second+" 4=- 5="+third {
 		t.Fatal("filled in", err, filled)
-	}
-	var count, keys int
-	if err := s.DB.QueryRow(ctx, `SELECT cardinality(songs_played),cardinality(score_keys) FROM dan_attempts WHERE idempotency_key='dan-attempt-key-0003'`).Scan(&count, &keys); err != nil || count != 1 || keys != 0 {
-		t.Fatal(err, count, keys)
 	}
 }

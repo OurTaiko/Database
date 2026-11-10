@@ -83,11 +83,14 @@ func internal(w http.ResponseWriter, err error) {
 	problem(w, 503, "SERVICE_UNAVAILABLE", "服务暂时不可用，请稍后重试")
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+	return decodeLimit(w, r, v, 64*1024)
+}
+func decodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
 	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 		problem(w, 415, "CONTENT_TYPE_INVALID", "请使用 JSON 请求")
 		return false
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(v); err != nil {

@@ -25,4 +25,8 @@ $$;
 -- Again for the attempts whose scores were looked for by time (those with keys have theirs).
 UPDATE public.dan_attempts SET songs_played = public.dan_attempt_scores(id) WHERE cardinality(songs_played) > 0 AND cardinality(score_keys) = 0;
 
+-- The game now sends a course's scores with the attempt, which saves them and takes their ids in
+-- one go (POST /game/dan-attempts), so no attempt waits for a score by its upload key any more.
+ALTER TABLE public.dan_attempts DROP COLUMN score_keys;
+
 INSERT INTO internal.schema_migrations (version) VALUES (25);
