@@ -333,11 +333,9 @@ func checkMovie(w http.ResponseWriter, meta tja.Metadata, mv *stagedFile, existi
 		problem(w, 400, "UPLOAD_FILES_INVALID", "TJA 没有声明 BGMOVIE，不能上传视频")
 		return false, false
 	case meta.Movie != "" && mv == nil:
-		if existing == nil || existing.MovieHash == "" {
-			invalid("TJA_MOVIE_MISSING", fmt.Sprintf("TJA 的 BGMOVIE 引用了「%s」，请同时选择该视频文件，或删除 BGMOVIE 后重新上传。", meta.Movie), meta.Movie, "")
-			return false, false
-		}
-		return true, true
+		// Declared without a file: a replacement keeps the stored movie, and a chart without
+		// one is published without (BGMOVIE is cleared).
+		return existing != nil && existing.MovieHash != "", true
 	case mv != nil && norm.NFC.String(meta.Movie) != norm.NFC.String(mv.name):
 		invalid("TJA_MOVIE_MISMATCH", fmt.Sprintf("BGMOVIE 引用了「%s」，但你选择的是「%s」。请选择对应文件，或修改 TJA 的 BGMOVIE 后重新选择。", meta.Movie, mv.name), meta.Movie, mv.name)
 		return false, false

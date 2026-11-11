@@ -129,8 +129,9 @@ func TestBackgroundMovies(t *testing.T) {
 	if code := send(string(source), "a.mp4", movieData, false).Code; code != 400 {
 		t.Fatal("a movie the TJA does not declare", code)
 	}
-	if code := send(withMovie, "", nil, false).Code; code != 422 {
-		t.Fatal("a declared movie that was not sent", code)
+	// Declared but not sent, with no stored movie to keep: updated without one.
+	if bare := decode(send(withMovie, "", nil, false)); bare.MovieHash != "" || !strings.Contains(storedTJA(), "BGMOVIE:\n") {
+		t.Fatal("a declared movie that was not sent", bare.MovieHash, storedTJA())
 	}
 	c := decode(send(withMovie, "a.mp4", movieData, false))
 	if c.MovieHash == "" || c.MovieOffset != 1.5 || !strings.Contains(storedTJA(), "BGMOVIE:"+c.MovieHash+".mp4\n") {
