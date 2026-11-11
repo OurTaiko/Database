@@ -66,7 +66,7 @@ func (s *Server) replacePlaylistCover(w http.ResponseWriter, r *http.Request) {
 		if e != nil {
 			return false, e
 		}
-		gameFile, e := s.storeImageAs(r.Context(), tx, game, "jpg", "image/jpeg")
+		gameFile, e := s.storeImageAs(r.Context(), tx, "cover", game, "jpg", "image/jpeg")
 		if e != nil {
 			return false, e
 		}

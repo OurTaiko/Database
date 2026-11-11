@@ -24,7 +24,11 @@ type uploadJob struct {
 	user, key, dir           string
 	existingID               string // set when replacing a chart's files
 	audioHash, movieHash     string // files of that chart the upload keeps
+	coverHash                string // that chart's cover, which PREIMAGE names when no cover is sent
+	backgroundHash           string // that chart's background image (BGIMAGE)
 	tja, audio, cover, movie *stagedFile
+	background               *stagedFile // the BGIMAGE file
+	keepBackground           bool        // a replacement still declaring BGIMAGE keeps backgroundHash
 	normalized               []byte
 	meta                     tja.Metadata
 	description              string
@@ -112,7 +116,7 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 			return failed(err)
 		}
 		// Kept files must still be the ones the uploader saw.
-		if (af == nil && current.AudioHash != j.audioHash) || (j.keepMovie && current.MovieHash != j.movieHash) {
+		if (af == nil && current.AudioHash != j.audioHash) || (j.keepMovie && current.MovieHash != j.movieHash) || (j.cover == nil && current.CoverHash != j.coverHash) || (j.keepBackground && current.BackgroundHash != j.backgroundHash) {
 			return rejected(409, "CHART_FILES_CHANGED", "该乐曲的文件已被其他更新替换，请重新打开谱面页面")
 		}
 		duration = current.Duration
@@ -137,6 +141,20 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 		coverData, err = cover.Encode(ctx, j.cover.name, raw)
 		if errors.Is(err, cover.ErrInvalid) {
 			failures = append(failures, fileFailure{"cover", "COVER_INVALID"})
+		} else if err != nil {
+			return failed(err)
+		}
+	}
+	// The background image is stored as WebP like the cover; one that fails is left out.
+	var backgroundData []byte
+	if j.background != nil {
+		raw, err := os.ReadFile(j.background.path)
+		if err != nil {
+			return failed(err)
+		}
+		backgroundData, err = cover.EncodeBackground(ctx, j.background.name, raw)
+		if errors.Is(err, cover.ErrInvalid) {
+			failures = append(failures, fileFailure{"bgimage", "BGIMAGE_INVALID"})
 		} else if err != nil {
 			return failed(err)
 		}
@@ -178,6 +196,26 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 		}
 		stored, ok = tja.SetMovie(stored, name)
 	}
+	// PREIMAGE names the chart's stored cover as the chart's package holds it (the new one, or
+	// the one kept, also when a new cover fails), and BGIMAGE the stored background image,
+	// only ever one it declares; without one, the header is cleared.
+	coverName, backgroundName := "", ""
+	if coverData != nil {
+		coverName = hash(string(coverData)) + ".webp"
+	} else if j.coverHash != "" {
+		coverName = j.coverHash + ".webp"
+	}
+	if backgroundData != nil {
+		backgroundName = hash(string(backgroundData)) + ".webp"
+	} else if j.keepBackground {
+		backgroundName = j.backgroundHash + ".webp"
+	}
+	if ok {
+		stored, ok = tja.SetSongHeader(stored, "PREIMAGE", coverName)
+	}
+	if ok {
+		stored, ok = tja.SetSongHeader(stored, "BGIMAGE", backgroundName)
+	}
 	if !ok {
 		return failed(errors.New("validated TJA lost a rewritten header"))
 	}
@@ -192,21 +230,24 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 		return failed(err)
 	}
 	defer tx.Rollback(context.Background())
-	var previousTJA, previousAudio, previousCover, previousMovie *int64
+	var previousTJA, previousAudio, previousCover, previousMovie, previousBackground *int64
 	if j.existingID != "" {
 		// Serialize with other replacements, deletion and score submissions, and confirm the
 		// kept files once more now that nothing can change them.
-		var audioSHA, movieHash string
-		err = tx.QueryRow(ctx, `SELECT c.tja_file,c.audio_file,c.cover_file,c.movie_file,COALESCE(af.sha256,''),COALESCE(mf.sha256,'') FROM charts c
- LEFT JOIN chart_resources af ON af.id=c.audio_file LEFT JOIN chart_resources mf ON mf.id=c.movie_file WHERE c.id=$1 AND `+publishedChart+` FOR UPDATE OF c`,
-			j.existingID).Scan(&previousTJA, &previousAudio, &previousCover, &previousMovie, &audioSHA, &movieHash)
+		var audioSHA, movieHash, coverHash, backgroundHash string
+		err = tx.QueryRow(ctx, `SELECT c.tja_file,c.audio_file,c.cover_file,c.movie_file,c.bgimage_file,COALESCE(af.sha256,''),COALESCE(mf.sha256,''),COALESCE(cf.sha256,''),COALESCE(bf.sha256,'') FROM charts c
+ LEFT JOIN chart_resources af ON af.id=c.audio_file LEFT JOIN chart_resources mf ON mf.id=c.movie_file
+ LEFT JOIN chart_resources cf ON cf.id=c.cover_file LEFT JOIN chart_resources bf ON bf.id=c.bgimage_file WHERE c.id=$1 AND `+publishedChart+` FOR UPDATE OF c`,
+			j.existingID).Scan(&previousTJA, &previousAudio, &previousCover, &previousMovie, &previousBackground, &audioSHA, &movieHash, &coverHash, &backgroundHash)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return rejected(404, "CHART_NOT_FOUND", "谱面不存在或已删除")
 		}
 		if err != nil {
 			return failed(err)
 		}
-		if (af == nil && (previousAudio == nil || audioSHA != j.audioHash)) || (j.keepMovie && movieHash != j.movieHash) {
+		// A cover or background image changed meanwhile would leave the stored TJA naming the old.
+		if (af == nil && (previousAudio == nil || audioSHA != j.audioHash)) || (j.keepMovie && movieHash != j.movieHash) ||
+			(coverData == nil && coverHash != j.coverHash) || (j.keepBackground && backgroundHash != j.backgroundHash) {
 			return rejected(409, "CHART_FILES_CHANGED", "该乐曲的文件已被其他更新替换，请重新打开谱面页面")
 		}
 	}
@@ -240,6 +281,16 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 	} else if j.keepMovie {
 		movieFile = previousMovie
 	}
+	var backgroundFile *int64
+	if backgroundData != nil {
+		id, err := s.storeImageAs(ctx, tx, "bgimage", backgroundData, "webp", "image/webp")
+		if err != nil {
+			return failed(err)
+		}
+		backgroundFile = &id
+	} else if j.keepBackground {
+		backgroundFile = previousBackground
+	}
 	titles, _ := json.Marshal(j.meta.TitleTranslations)
 	subtitles, _ := json.Marshal(j.meta.SubtitleTranslations)
 	id := j.existingID
@@ -247,16 +298,16 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 		// Names and their translations come from the new TJA again, as on Fanmade, unless
 		// keepTitles keeps the chart's own.
 		_, err = tx.Exec(ctx, `UPDATE charts SET tja_file=$2,audio_file=$3,cover_file=$4,description=$5,category_flags=$6,nijiiro_id=$7,official_id=$8,
- bpm=$11,offset_seconds=$12,demo_start=$13,demo_end=$14,duration=$15,movie_file=$19,movie_offset=$20,
+ bpm=$11,offset_seconds=$12,demo_start=$13,demo_end=$14,duration=$15,movie_file=$19,movie_offset=$20,bgimage_file=$21,
  title=CASE WHEN $18 THEN title ELSE $9 END,subtitle=CASE WHEN $18 THEN subtitle ELSE $10 END,
  title_translations=CASE WHEN $18 THEN title_translations ELSE $16 END,subtitle_translations=CASE WHEN $18 THEN subtitle_translations ELSE $17 END WHERE id=$1`,
 			id, tjaFile, audioFile, coverFile, j.description, j.flags, j.nijiiroID, j.officialID,
-			j.meta.Title, j.meta.Subtitle, j.meta.BPM, j.meta.Offset, demoStart, demoEnd, duration, titles, subtitles, j.keepTitles, movieFile, j.meta.MovieOffset)
+			j.meta.Title, j.meta.Subtitle, j.meta.BPM, j.meta.Offset, demoStart, demoEnd, duration, titles, subtitles, j.keepTitles, movieFile, j.meta.MovieOffset, backgroundFile)
 	} else {
 		id = ID()
-		_, err = tx.Exec(ctx, `INSERT INTO charts(id,nijiiro_id,official_id,owner_ids,tja_file,audio_file,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end,movie_file,movie_offset)
- VALUES($20,$1,$2,ARRAY[$3::text],$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
-			j.nijiiroID, j.officialID, j.user, tjaFile, audioFile, coverFile, j.description, j.meta.Title, j.meta.Subtitle, j.meta.BPM, j.meta.Offset, demoStart, duration, titles, subtitles, j.flags, demoEnd, movieFile, j.meta.MovieOffset, id)
+		_, err = tx.Exec(ctx, `INSERT INTO charts(id,nijiiro_id,official_id,owner_ids,tja_file,audio_file,cover_file,description,title,subtitle,bpm,offset_seconds,demo_start,duration,title_translations,subtitle_translations,category_flags,demo_end,movie_file,movie_offset,bgimage_file)
+ VALUES($20,$1,$2,ARRAY[$3::text],$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$21)`,
+			j.nijiiroID, j.officialID, j.user, tjaFile, audioFile, coverFile, j.description, j.meta.Title, j.meta.Subtitle, j.meta.BPM, j.meta.Offset, demoStart, duration, titles, subtitles, j.flags, demoEnd, movieFile, j.meta.MovieOffset, id, backgroundFile)
 	}
 	if err != nil {
 		return failed(err)
@@ -282,7 +333,7 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
 	for _, change := range []struct {
 		before *int64
 		after  *int64
-	}{{previousTJA, &tjaFile}, {previousAudio, &audioFile}, {previousCover, coverFile}, {previousMovie, movieFile}} {
+	}{{previousTJA, &tjaFile}, {previousAudio, &audioFile}, {previousCover, coverFile}, {previousMovie, movieFile}, {previousBackground, backgroundFile}} {
 		if change.before != nil && (change.after == nil || *change.after != *change.before) {
 			retired = append(retired, *change.before)
 		}

@@ -217,43 +217,57 @@ func (s *Server) processMovie(ctx context.Context, j *uploadJob) uploadResult {
 // the scores, are kept. tx must hold the chart's row lock. It returns the replaced TJA file,
 // for the caller to release once tx commits.
 func (s *Server) rewriteMovie(ctx context.Context, tx pgx.Tx, chartID, movieSHA string, movieFile *int64, offset float64) ([]int64, error) {
-	var previous int64
-	var key, name string
-	if err := tx.QueryRow(ctx, `SELECT r.id,r.storage_key,r.original_filename FROM charts c JOIN chart_resources r ON r.id=c.tja_file WHERE c.id=$1`, chartID).Scan(&previous, &key, &name); err != nil {
-		return nil, err
-	}
-	f, err := s.Config.Objects.Open(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	data, err := io.ReadAll(io.LimitReader(f, tja.MaxTJA+1))
-	f.Close()
-	if err != nil {
-		return nil, err
-	}
-	// Only the two headers change, so a file stored under older rules is not judged again.
-	stored, ok := tja.SetMovieHeaders(data, movieSHA+"."+video.Extension, offset)
-	if !ok || len(stored) > tja.MaxTJA || tja.MovieName(stored) != movieSHA+"."+video.Extension {
-		return nil, fmt.Errorf("stored TJA of %s cannot take movie headers", chartID)
-	}
-	staged, err := os.CreateTemp(s.Config.Storage, "staging-tja-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.Remove(staged.Name())
-	_, err = staged.Write(stored)
-	if err = errors.Join(err, staged.Close()); err != nil {
-		return nil, err
-	}
-	tjaFile, err := s.storeFile(ctx, tx, staged.Name(), name, "tja", "application/octet-stream", hash(string(stored)), int64(len(stored)))
+	tjaFile, retired, err := s.rewriteStoredTJA(ctx, tx, chartID, func(data []byte) ([]byte, bool) {
+		stored, ok := tja.SetMovieHeaders(data, movieSHA+"."+video.Extension, offset)
+		return stored, ok && tja.MovieName(stored) == movieSHA+"."+video.Extension
+	})
 	if err != nil {
 		return nil, err
 	}
 	if _, err = tx.Exec(ctx, `UPDATE charts SET tja_file=$2,movie_file=COALESCE($3,movie_file),movie_offset=$4 WHERE id=$1`, chartID, tjaFile, movieFile, offset); err != nil {
 		return nil, err
 	}
-	if tjaFile == previous {
-		return nil, nil
+	return retired, nil
+}
+
+// rewriteStoredTJA stores the chart's TJA as edit changes it and returns the new file, for the
+// caller to point the chart at, and the old one to release once committed (none when the
+// content did not change). Only headers change, so a file stored under older rules is not
+// judged again. tx must hold the chart's row lock, and the chart must have a TJA.
+func (s *Server) rewriteStoredTJA(ctx context.Context, tx pgx.Tx, chartID string, edit func([]byte) ([]byte, bool)) (int64, []int64, error) {
+	var previous int64
+	var key, name string
+	if err := tx.QueryRow(ctx, `SELECT r.id,r.storage_key,r.original_filename FROM charts c JOIN chart_resources r ON r.id=c.tja_file WHERE c.id=$1`, chartID).Scan(&previous, &key, &name); err != nil {
+		return 0, nil, err
 	}
-	return []int64{previous}, nil
+	f, err := s.Config.Objects.Open(ctx, key)
+	if err != nil {
+		return 0, nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(f, tja.MaxTJA+1))
+	f.Close()
+	if err != nil {
+		return 0, nil, err
+	}
+	stored, ok := edit(data)
+	if !ok || len(stored) > tja.MaxTJA {
+		return 0, nil, fmt.Errorf("stored TJA of %s cannot take its new headers", chartID)
+	}
+	staged, err := os.CreateTemp(s.Config.Storage, "staging-tja-")
+	if err != nil {
+		return 0, nil, err
+	}
+	defer os.Remove(staged.Name())
+	_, err = staged.Write(stored)
+	if err = errors.Join(err, staged.Close()); err != nil {
+		return 0, nil, err
+	}
+	tjaFile, err := s.storeFile(ctx, tx, staged.Name(), name, "tja", "application/octet-stream", hash(string(stored)), int64(len(stored)))
+	if err != nil {
+		return 0, nil, err
+	}
+	if tjaFile == previous {
+		return tjaFile, nil, nil
+	}
+	return tjaFile, []int64{previous}, nil
 }

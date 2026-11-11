@@ -137,6 +137,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/charts/{id}/audio", s.streamAudio)
 	mux.HandleFunc("GET /api/v1/charts/{id}/preview", s.streamPreview)
 	mux.HandleFunc("GET /api/v1/charts/{id}/movie", s.streamMovie)
+	mux.HandleFunc("GET /api/v1/charts/{id}/bgimage", s.streamBackground)
 	mux.HandleFunc("GET /api/v1/charts/{id}/download", s.downloadPackage)
 	mux.HandleFunc("GET /api/v1/charts/{id}/resources", s.resourceLinks)
 	mux.HandleFunc("POST /api/v1/game/login", s.gameLogin)

@@ -95,6 +95,13 @@ func (s *Server) streamMovie(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// streamBackground sends the chart's background image (BGIMAGE), as Fanmade's /bgimage.
+func (s *Server) streamBackground(w http.ResponseWriter, r *http.Request) {
+	if key, _, digest, ok := s.publishedFile(w, r, "bgimage_file"); ok {
+		s.serveObject(w, r, key, digest+".webp", digest, "image/webp", "inline")
+	}
+}
+
 // streamPreview sends the game's song-select preview clip.
 func (s *Server) streamPreview(w http.ResponseWriter, r *http.Request) {
 	if key, _, digest, ok := s.publishedFile(w, r, "preview_file"); ok {

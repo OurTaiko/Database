@@ -18,6 +18,7 @@ import {
   CheckIcon as Check,
   CircleNotchIcon as LoaderCircle,
   UploadSimpleIcon as Upload,
+  FolderOpenIcon as FolderOpen,
 } from '@phosphor-icons/react'
 import { CoverPicker } from '@sitekit/components/cover-picker'
 import { MoviePicker } from '@sitekit/components/movie-picker'
@@ -32,13 +33,11 @@ import { EmptyState } from '@sitekit/components/empty-state'
 import { Notice } from '@sitekit/notifications'
 import { useNotification } from '@sitekit/notification-context'
 import { useSession } from '@sitekit/session-context'
-import {
-  isAudioFilename,
-  isMovieFilename,
-  prepareTja,
-  validateFiles,
-  validateMovie,
-} from '@sitekit/tja'
+import { prepareTja, validateFiles, validateMovie } from '@sitekit/tja'
+import { BatchUpload } from '@sitekit/batch-upload'
+import { BackgroundPicker } from '@sitekit/components/background-picker'
+import { chosenFiles, droppedFiles, scanFolder, validateImages } from '@sitekit/folder-upload'
+import type { FolderChart, FolderFile } from '@sitekit/folder-upload'
 import type { PreparedTja } from '@sitekit/tja'
 import { blockName, slotKey } from '@sitekit/courses'
 import {
@@ -163,6 +162,24 @@ export function UploadPage({
   const [collaborators, setCollaborators] = useState<PublicUser[]>([])
   const [audioUrl, setAudioUrl] = useState('')
   const [audioDuration, setAudioDuration] = useState<number | null>(null)
+  // The background image, which the TJA must name with BGIMAGE.
+  const [background, setBackground] = useState<File | null>(null)
+  // Chosen images that are not the ones the TJA names (PREIMAGE, BGIMAGE).
+  const [imageError, setImageError] = useState('')
+  // A folder with several charts publishes them in a batch instead of this form.
+  const [batch, setBatch] = useState<FolderChart[] | null>(null)
+  const [reading, setReading] = useState(false)
+  useEffect(() => {
+    let active = true
+    setImageError('')
+    if (metadata)
+      validateImages(metadata, cover, background).catch((e: Error) => {
+        if (active) setImageError(e.message)
+      })
+    return () => {
+      active = false
+    }
+  }, [metadata, cover, background])
   useEffect(() => () => controller.current?.abort(), [])
   useEffect(() => {
     let active = true
@@ -223,30 +240,45 @@ export function UploadPage({
     if (kind === 'tja') setTja(file)
     else setAudio(file)
   }
+  // A drop or chosen folder: one chart fills this form, several are published as a batch.
+  const take = async (files: Promise<FolderFile[]> | FolderFile[]) => {
+    if (busy || reading) return
+    setReading(true)
+    try {
+      const charts = await scanFolder(await files)
+      if (!charts.length) {
+        notify(t('folderUpload.noTja'), 'error')
+        return
+      }
+      if (charts.length > 1) {
+        if (existing) notify(t('folderUpload.oneChartForUpdate', { count: charts.length }), 'error')
+        else setBatch(charts)
+        return
+      }
+      const [chart] = charts
+      requestKey.current = createRequestKey()
+      setTja(chart.tja)
+      // A chart with files keeps its audio when the folder has none.
+      setAudio(chart.audio ?? (retainedAudioName ? null : audio))
+      setCover(chart.cover)
+      setBackground(chart.background)
+      setMovie(chart.movie)
+      for (const m of chart.missing)
+        if (m.header === 'PREIMAGE' || m.header === 'BGIMAGE')
+          notify(t('folderUpload.missingImage', { header: m.header, value: m.value }), 'info')
+    } catch (e) {
+      notify((e as Error).message, 'error')
+    } finally {
+      setReading(false)
+    }
+  }
   const drop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     if (busy) return
-    const files = Array.from(e.dataTransfer.files),
-      charts = files.filter((f) => /\.tja$/i.test(f.name)),
-      tracks = files.filter((f) => isAudioFilename(f.name)),
-      movies = files.filter((f) => isMovieFilename(f.name))
-    if (
-      charts.length > 1 ||
-      tracks.length > 1 ||
-      movies.length > 1 ||
-      charts.length + tracks.length + movies.length !== files.length
-    ) {
-      notify(t('messages.dropOneTjaAndOneOggOrMp3NoAdditionalFiles'), 'error')
-      return
-    }
-    if (charts[0]) choose('tja', charts[0])
-    if (tracks[0]) choose('audio', tracks[0])
-    if (movies[0]) {
-      requestKey.current = createRequestKey()
-      setMovie(movies[0])
-    }
+    // The folder entries must be read during the drop event, before anything awaits.
+    void take(droppedFiles(e.dataTransfer))
   }
-  const fileError = mode === 'song' ? '' : validationError
+  const fileError = mode === 'song' ? '' : validationError || imageError
   const ready = mode === 'song' ? !!title.trim() : !!metadata && !validating
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -367,6 +399,7 @@ export function UploadPage({
         form.append('tja', metadata!.file)
         if (audio) form.append('audio', audio)
         if (movie) form.append('movie', movie)
+        if (background) form.append('bgimage', background)
       }
       if (cover) form.append('cover', cover)
       if (replacing) form.append('confirmReset', 'true')
@@ -473,7 +506,7 @@ export function UploadPage({
           mode === 'song' && <p>{t('db.songOnlyText')}</p>
         )}
       </div>
-      {!existing && (
+      {!existing && !batch && (
         <Tabs
           value={mode}
           onValueChange={(value) => {
@@ -500,282 +533,334 @@ export function UploadPage({
           <p>{t('messages.theSongUrlStaysTheSameTitlesComeFromTheNewTja')}</p>
         </Card>
       )}
-      <form className="space-y-6" onSubmit={submit}>
-        {mode === 'song' ? (
-          <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
-            <h2 className="text-base font-extrabold">{t('db.songInformation')}</h2>
-            <div className="grid gap-4 sm:grid-cols-[1fr_1fr_8rem]">
-              <div className="space-y-2">
-                <Label htmlFor="upload-title">{t('db.songTitle')}</Label>
-                <Input
-                  id="upload-title"
-                  value={title}
-                  maxLength={500}
-                  required
-                  disabled={busy}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
+      {batch ? (
+        <BatchUpload charts={batch} onExit={() => setBatch(null)} />
+      ) : (
+        <form className="space-y-6" onSubmit={submit}>
+          {mode === 'song' ? (
+            <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
+              <h2 className="text-base font-extrabold">{t('db.songInformation')}</h2>
+              <div className="grid gap-4 sm:grid-cols-[1fr_1fr_8rem]">
+                <div className="space-y-2">
+                  <Label htmlFor="upload-title">{t('db.songTitle')}</Label>
+                  <Input
+                    id="upload-title"
+                    value={title}
+                    maxLength={500}
+                    required
+                    disabled={busy}
+                    onChange={(e) => setTitle(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="upload-subtitle">{t('db.songSubtitle')}</Label>
+                  <Input
+                    id="upload-subtitle"
+                    value={subtitle}
+                    maxLength={500}
+                    disabled={busy}
+                    onChange={(e) => setSubtitle(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="upload-bpm">BPM</Label>
+                  <Input
+                    id="upload-bpm"
+                    inputMode="decimal"
+                    value={bpm}
+                    disabled={busy}
+                    onChange={(e) => setBpm(e.target.value)}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="upload-subtitle">{t('db.songSubtitle')}</Label>
-                <Input
-                  id="upload-subtitle"
-                  value={subtitle}
-                  maxLength={500}
-                  disabled={busy}
-                  onChange={(e) => setSubtitle(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="upload-bpm">BPM</Label>
-                <Input
-                  id="upload-bpm"
-                  inputMode="decimal"
-                  value={bpm}
-                  disabled={busy}
-                  onChange={(e) => setBpm(e.target.value)}
-                />
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">{t('db.songFieldsHint')}</p>
-            <CoverPicker file={cover} onChange={setCover} disabled={busy} />
-          </Card>
-        ) : (
-          <Card
-            className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={drop}
-          >
-            <h2 className="text-base font-extrabold">{t('db.uploadFiles')}</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {fileTile('tja')}
-              {fileTile('audio')}
-            </div>
-            {retainedAudioName && audio && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="default"
-                className="self-start"
-                disabled={busy}
-                onClick={() => choose('audio', null)}
+              <p className="text-sm text-muted-foreground">{t('db.songFieldsHint')}</p>
+              <CoverPicker file={cover} onChange={setCover} disabled={busy} />
+            </Card>
+          ) : (
+            <Card
+              className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={drop}
+            >
+              <h2 className="text-base font-extrabold">{t('db.uploadFiles')}</h2>
+              <div
+                className="flex flex-col items-center gap-2 rounded-[14px] border border-dashed p-5 text-center text-sm text-muted-foreground [&>strong]:text-foreground"
+                aria-busy={reading}
               >
-                {t('messages.currentAudio', { filename: retainedAudioName })}
-              </Button>
-            )}
-            <p className="text-sm text-muted-foreground">
-              {retainedAudioName && !audio ? t('db.replaceWaveHint') : t('db.uploadWaveHint')}
-            </p>
-            {fileError && (
-              <p role="alert" className="text-sm text-destructive">
-                {fileError}
-              </p>
-            )}
-            {!fileError && metadata && metadata.sourceEncoding !== 'UTF-8' && (
+                {reading ? (
+                  <LoaderCircle className="animate-spin" size={24} />
+                ) : (
+                  <Upload size={24} />
+                )}
+                <strong>{reading ? t('folderUpload.reading') : t('folderUpload.dropHere')}</strong>
+                {!existing && <span>{t('folderUpload.dropHint')}</span>}
+                <Label
+                  className={buttonVariants({ variant: 'secondary', className: 'mt-1' })}
+                  aria-disabled={busy || reading}
+                >
+                  <FolderOpen size={18} aria-hidden="true" />
+                  {t('folderUpload.chooseFolder')}
+                  <input
+                    type="file"
+                    className="sr-only"
+                    disabled={busy || reading}
+                    {...{ webkitdirectory: '' }}
+                    onChange={(e) => {
+                      const files = chosenFiles(e.target.files)
+                      e.target.value = ''
+                      void take(files)
+                    }}
+                  />
+                </Label>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {fileTile('tja')}
+                {fileTile('audio')}
+              </div>
+              {retainedAudioName && audio && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="default"
+                  className="self-start"
+                  disabled={busy}
+                  onClick={() => choose('audio', null)}
+                >
+                  {t('messages.currentAudio', { filename: retainedAudioName })}
+                </Button>
+              )}
               <p className="text-sm text-muted-foreground">
-                {t('db.tjaConverted', { encoding: metadata.sourceEncoding })}
+                {retainedAudioName && !audio ? t('db.replaceWaveHint') : t('db.uploadWaveHint')}
               </p>
-            )}
-            <CoverPicker file={cover} onChange={setCover} disabled={busy} />
-            <div className="flex min-w-0 flex-col gap-3">
-              <h3 className="text-sm font-extrabold">{t('messages.backgroundMovie')}</h3>
-              <MoviePicker
-                file={movie}
+              {fileError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {fileError}
+                </p>
+              )}
+              {!fileError && metadata && metadata.sourceEncoding !== 'UTF-8' && (
+                <p className="text-sm text-muted-foreground">
+                  {t('db.tjaConverted', { encoding: metadata.sourceEncoding })}
+                </p>
+              )}
+              <CoverPicker file={cover} onChange={setCover} disabled={busy} />
+              <div className="flex min-w-0 flex-col gap-3">
+                <h3 className="text-sm font-extrabold">{t('messages.backgroundMovie')}</h3>
+                <MoviePicker
+                  file={movie}
+                  disabled={busy}
+                  hint={hasStoredMovie ? t('messages.keepMovie') : t('messages.movieUpTo64Mib')}
+                  onChange={(file) => {
+                    requestKey.current = createRequestKey()
+                    setMovie(file)
+                  }}
+                />
+              </div>
+              <div className="flex min-w-0 flex-col gap-3">
+                <h3 className="text-sm font-extrabold">{t('folderUpload.backgroundTitle')}</h3>
+                <BackgroundPicker
+                  file={background}
+                  disabled={busy}
+                  hint={
+                    replacing && existing?.bgimageHash
+                      ? t('folderUpload.keepBackground')
+                      : t('folderUpload.backgroundHint')
+                  }
+                  onChange={(file) => {
+                    requestKey.current = createRequestKey()
+                    setBackground(file)
+                  }}
+                />
+              </div>
+            </Card>
+          )}
+          {mode === 'files' && tja && (
+            <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
+              <h2 className="text-base font-extrabold">{t('messages.previewRange')}</h2>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Label htmlFor="upload-demo-start" className="flex flex-col items-start gap-2">
+                  {t('messages.previewStartSeconds')}
+                  <Input
+                    id="upload-demo-start"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={demoStart}
+                    disabled={busy}
+                    onChange={(e) => setDemoStart(e.target.value)}
+                  />
+                </Label>
+                <Label htmlFor="upload-demo-end" className="flex flex-col items-start gap-2">
+                  {t('messages.previewEndSeconds')}
+                  <Input
+                    id="upload-demo-end"
+                    type="number"
+                    min="0"
+                    max="1215"
+                    step="any"
+                    value={demoEnd}
+                    disabled={busy}
+                    onChange={(e) => setDemoEnd(e.target.value)}
+                  />
+                </Label>
+              </div>
+              {(audioUrl || retainedAudioName) && (
+                <AudioPlayer
+                  label={t('messages.audioPreview')}
+                  src={audioUrl || endpoints.resource(existing!, 'audio')}
+                  startAt={demoStart.trim() ? Number(demoStart) : NaN}
+                  endAt={demoEnd.trim() ? Number(demoEnd) : NaN}
+                  knownDuration={audio ? (audioDuration ?? undefined) : existing?.duration}
+                  disabled={busy || Number(demoEnd) > 1215}
+                />
+              )}
+            </Card>
+          )}
+          {mode === 'files' && metadata && (
+            <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
+              <h2 className="text-base font-extrabold">{t('messages.difficultiesAndCreators')}</h2>
+              <p className="text-sm text-muted-foreground">
+                {metadata.maker
+                  ? t('messages.creatorNamesAreFilledFromMakerYouCanEditEachOne')
+                  : t('messages.noMakerWasSpecifiedEnterACreatorForEachDifficulty')}
+              </p>
+              <Table className="w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">{t('messages.difficulty')}</TableHead>
+                    <TableHead scope="col">{t('messages.creator')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metadata.difficulties.map((d) => (
+                    <TableRow key={slotKey(d)}>
+                      <TableHead scope="row">
+                        {blockName(d)} ★{d.level}
+                      </TableHead>
+                      <TableCell>
+                        <Input
+                          aria-label={t('messages.courseCreator', { difficulty: blockName(d) })}
+                          value={d.maker}
+                          maxLength={500}
+                          placeholder={t('messages.notSpecified')}
+                          disabled={busy}
+                          onChange={(e) => {
+                            const maker = e.target.value
+                            setTypedMakers((typed) => ({ ...typed, [slotKey(d)]: maker }))
+                            setMetadata(
+                              (current) =>
+                                current && {
+                                  ...current,
+                                  difficulties: current.difficulties.map((block) =>
+                                    slotKey(block) === slotKey(d) ? { ...block, maker } : block,
+                                  ),
+                                },
+                            )
+                            requestKey.current = createRequestKey()
+                          }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+          <Card className="min-w-0 gap-5 border-[1.5px] border-border p-5 shadow-none sm:p-6">
+            <h2 className="text-base font-extrabold">{t('db.record')}</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="upload-nijiiro-id">{t('messages.nijiiroId')}</Label>
+                <Input
+                  id="upload-nijiiro-id"
+                  inputMode="numeric"
+                  value={nijiiroId}
+                  disabled={busy}
+                  onChange={(e) => setNijiiroId(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="upload-official-id">{t('messages.officialId')}</Label>
+                <Input
+                  id="upload-official-id"
+                  value={officialId}
+                  maxLength={64}
+                  disabled={busy}
+                  onChange={(e) => setOfficialId(e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">{t('db.identifierHint')}</p>
+            <CategoryPicker value={categoryIds} onChange={setCategoryIds} disabled={busy} />
+            <div className="space-y-2">
+              <Label htmlFor="upload-description">{t('messages.notes')}</Label>
+              <Textarea
+                id="upload-description"
+                rows={4}
+                maxLength={1000}
+                value={description}
                 disabled={busy}
-                hint={hasStoredMovie ? t('messages.keepMovie') : t('messages.movieUpTo64Mib')}
-                onChange={(file) => {
+                onChange={(e) => setDescription(e.target.value)}
+              />
+              <p className="text-right text-xs text-muted-foreground">
+                {description.length} / 1000
+              </p>
+            </div>
+          </Card>
+          {/* An existing chart invites from its own page. */}
+          {!existing && (
+            <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
+              <UploadCollaborators
+                value={collaborators}
+                disabled={busy}
+                onChange={(users) => {
+                  setCollaborators(users)
                   requestKey.current = createRequestKey()
-                  setMovie(file)
                 }}
               />
+            </Card>
+          )}
+          {busy && (
+            <div className="space-y-2" role="status">
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                {existing && replacing ? t('messages.updatingSong') : t('messages.publishingChart')}
+              </p>
+              <Progress value={progress} />
             </div>
-          </Card>
-        )}
-        {mode === 'files' && tja && (
-          <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
-            <h2 className="text-base font-extrabold">{t('messages.previewRange')}</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Label htmlFor="upload-demo-start" className="flex flex-col items-start gap-2">
-                {t('messages.previewStartSeconds')}
-                <Input
-                  id="upload-demo-start"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={demoStart}
-                  disabled={busy}
-                  onChange={(e) => setDemoStart(e.target.value)}
-                />
-              </Label>
-              <Label htmlFor="upload-demo-end" className="flex flex-col items-start gap-2">
-                {t('messages.previewEndSeconds')}
-                <Input
-                  id="upload-demo-end"
-                  type="number"
-                  min="0"
-                  max="1215"
-                  step="any"
-                  value={demoEnd}
-                  disabled={busy}
-                  onChange={(e) => setDemoEnd(e.target.value)}
-                />
-              </Label>
-            </div>
-            {(audioUrl || retainedAudioName) && (
-              <AudioPlayer
-                label={t('messages.audioPreview')}
-                src={audioUrl || endpoints.resource(existing!, 'audio')}
-                startAt={demoStart.trim() ? Number(demoStart) : NaN}
-                endAt={demoEnd.trim() ? Number(demoEnd) : NaN}
-                knownDuration={audio ? (audioDuration ?? undefined) : existing?.duration}
-                disabled={busy || Number(demoEnd) > 1215}
-              />
-            )}
-          </Card>
-        )}
-        {mode === 'files' && metadata && (
-          <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
-            <h2 className="text-base font-extrabold">{t('messages.difficultiesAndCreators')}</h2>
-            <p className="text-sm text-muted-foreground">
-              {metadata.maker
-                ? t('messages.creatorNamesAreFilledFromMakerYouCanEditEachOne')
-                : t('messages.noMakerWasSpecifiedEnterACreatorForEachDifficulty')}
-            </p>
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead scope="col">{t('messages.difficulty')}</TableHead>
-                  <TableHead scope="col">{t('messages.creator')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {metadata.difficulties.map((d) => (
-                  <TableRow key={slotKey(d)}>
-                    <TableHead scope="row">
-                      {blockName(d)} ★{d.level}
-                    </TableHead>
-                    <TableCell>
-                      <Input
-                        aria-label={t('messages.courseCreator', { difficulty: blockName(d) })}
-                        value={d.maker}
-                        maxLength={500}
-                        placeholder={t('messages.notSpecified')}
-                        disabled={busy}
-                        onChange={(e) => {
-                          const maker = e.target.value
-                          setTypedMakers((typed) => ({ ...typed, [slotKey(d)]: maker }))
-                          setMetadata(
-                            (current) =>
-                              current && {
-                                ...current,
-                                difficulties: current.difficulties.map((block) =>
-                                  slotKey(block) === slotKey(d) ? { ...block, maker } : block,
-                                ),
-                              },
-                          )
-                          requestKey.current = createRequestKey()
-                        }}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        )}
-        <Card className="min-w-0 gap-5 border-[1.5px] border-border p-5 shadow-none sm:p-6">
-          <h2 className="text-base font-extrabold">{t('db.record')}</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="upload-nijiiro-id">{t('messages.nijiiroId')}</Label>
-              <Input
-                id="upload-nijiiro-id"
-                inputMode="numeric"
-                value={nijiiroId}
-                disabled={busy}
-                onChange={(e) => setNijiiroId(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="upload-official-id">{t('messages.officialId')}</Label>
-              <Input
-                id="upload-official-id"
-                value={officialId}
-                maxLength={64}
-                disabled={busy}
-                onChange={(e) => setOfficialId(e.target.value)}
-              />
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground">{t('db.identifierHint')}</p>
-          <CategoryPicker value={categoryIds} onChange={setCategoryIds} disabled={busy} />
-          <div className="space-y-2">
-            <Label htmlFor="upload-description">{t('messages.notes')}</Label>
-            <Textarea
-              id="upload-description"
-              rows={4}
-              maxLength={1000}
-              value={description}
-              disabled={busy}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            <p className="text-right text-xs text-muted-foreground">{description.length} / 1000</p>
-          </div>
-        </Card>
-        {/* An existing chart invites from its own page. */}
-        {!existing && (
-          <Card className="min-w-0 gap-4 border-[1.5px] border-border p-5 shadow-none sm:p-6">
-            <UploadCollaborators
-              value={collaborators}
-              disabled={busy}
-              onChange={(users) => {
-                setCollaborators(users)
-                requestKey.current = createRequestKey()
-              }}
-            />
-          </Card>
-        )}
-        {busy && (
-          <div className="space-y-2" role="status">
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-              {existing && replacing ? t('messages.updatingSong') : t('messages.publishingChart')}
-            </p>
-            <Progress value={progress} />
-          </div>
-        )}
-        <div className="flex flex-wrap gap-3">
-          <Button type="submit" size="lg" disabled={!ready || busy || !!fileError}>
-            <Upload size={17} aria-hidden="true" />
-            {existing
-              ? replacing
-                ? t('messages.updateSongAndCharts')
-                : t('db.upload')
-              : mode === 'song'
-                ? t('db.registerSong')
-                : t('db.upload')}
-          </Button>
-          {busy ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              onClick={() => controller.current?.abort()}
-            >
-              {t('messages.cancel')}
+          )}
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" size="lg" disabled={!ready || busy || !!fileError}>
+              <Upload size={17} aria-hidden="true" />
+              {existing
+                ? replacing
+                  ? t('messages.updateSongAndCharts')
+                  : t('db.upload')
+                : mode === 'song'
+                  ? t('db.registerSong')
+                  : t('db.upload')}
             </Button>
-          ) : (
-            existing && (
-              <Link
-                className={buttonVariants({ variant: 'outline', size: 'lg' })}
-                to={`/charts/${existing.id}`}
+            {busy ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={() => controller.current?.abort()}
               >
                 {t('messages.cancel')}
-              </Link>
-            )
-          )}
-        </div>
-      </form>
+              </Button>
+            ) : (
+              existing && (
+                <Link
+                  className={buttonVariants({ variant: 'outline', size: 'lg' })}
+                  to={`/charts/${existing.id}`}
+                >
+                  {t('messages.cancel')}
+                </Link>
+              )
+            )}
+          </div>
+        </form>
+      )}
       {reviewing && existing && (
         <ReplacementReview
           review={reviewing.review}

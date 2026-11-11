@@ -117,14 +117,14 @@ func receiveUploadForm(w http.ResponseWriter, r *http.Request, dir string, allow
 		}
 		field, name := params["name"], params["filename"]
 		switch {
-		case field == "tja" || field == "audio" || field == "cover" || field == "movie":
+		case field == "tja" || field == "audio" || field == "cover" || field == "bgimage" || field == "movie":
 			validExtension := strings.EqualFold(filepath.Ext(name), ".tja")
 			maxBytes := int64(tja.MaxTJA)
 			if field == "audio" {
 				validExtension = audio.MediaType(name) != ""
 				maxBytes = tja.MaxAudio
 			}
-			if field == "cover" {
+			if field == "cover" || field == "bgimage" {
 				validExtension = cover.ValidExtension(name)
 				maxBytes = cover.MaxBytes
 			}
@@ -133,7 +133,7 @@ func receiveUploadForm(w http.ResponseWriter, r *http.Request, dir string, allow
 				maxBytes = video.MaxBytes
 			}
 			if files[field] != nil || !tja.SafeFilename(name) || !validExtension {
-				problem(w, 400, "UPLOAD_FILES_INVALID", "文件类型、数量或文件名无效；封面仅支持 JPG / PNG / WebP，视频仅支持 MP4 / WebM / MOV，文件名不能包含路径")
+				problem(w, 400, "UPLOAD_FILES_INVALID", "文件类型、数量或文件名无效；封面与背景图片仅支持 JPG / PNG / WebP，视频仅支持 MP4 / WebM / MOV，文件名不能包含路径")
 				return nil, nil, false
 			}
 			f := &stagedFile{name: name, path: filepath.Join(dir, field)}
@@ -248,8 +248,8 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tf, af, cf, mv := files["tja"], files["audio"], files["cover"], files["movie"]
-	if tf == nil && af == nil && mv == nil {
+	tf, af, cf, mv, bg := files["tja"], files["audio"], files["cover"], files["movie"], files["bgimage"]
+	if tf == nil && af == nil && mv == nil && bg == nil {
 		s.createSong(w, r, u, key, fields, cf, categoryIDs, flags, nijiiroID, officialID, collaborators)
 		return
 	}
@@ -269,11 +269,16 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	keepBackground, ok := checkImages(w, data, cf, bg, nil)
+	if !ok {
+		return
+	}
 	if !reservePending(w, s) {
 		return
 	}
 	parts := []string{tf.name, tf.sha, af.name, af.sha, description, strings.Join(categoryIDs, ","), fields["nijiiroId"], fields["officialId"], fields["demoStart"], fields["demoEnd"], fields["difficultyMakers"]}
-	for _, f := range []*stagedFile{cf, mv} {
+	// A background image is listed last, so requests without one keep the digest they had.
+	for _, f := range []*stagedFile{cf, mv, bg} {
 		if f != nil {
 			parts = append(parts, f.name, f.sha)
 		}
@@ -283,8 +288,8 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		parts = append(parts, "collaborators", strings.Join(collaborators, ","))
 	}
 	job := &uploadJob{
-		user: u.User.ID, key: key, dir: dir, tja: tf, audio: af, cover: cf, movie: mv, normalized: data, meta: meta,
-		description: description, flags: flags, nijiiroID: nijiiroID, officialID: officialID, fields: fields, keepMovie: keepMovie, collaborators: collaborators,
+		user: u.User.ID, key: key, dir: dir, tja: tf, audio: af, cover: cf, background: bg, movie: mv, normalized: data, meta: meta,
+		description: description, flags: flags, nijiiroID: nijiiroID, officialID: officialID, fields: fields, keepMovie: keepMovie, keepBackground: keepBackground, collaborators: collaborators,
 		// RFC 7240: the client asks not to wait for processing.
 		async: strings.Contains(strings.ToLower(r.Header.Get("Prefer")), "respond-async"), done: make(chan uploadResult, 1),
 	}
@@ -340,6 +345,32 @@ func checkMovie(w http.ResponseWriter, meta tja.Metadata, mv *stagedFile, existi
 	return false, true
 }
 
+// checkImages matches the images sent with the ones the TJA names, as Fanmade does: a cover
+// must be PREIMAGE's when it declares one, and a background image BGIMAGE's, which it must
+// declare. A replacement still declaring BGIMAGE without a new file keeps the chart's stored
+// image (keep reports that). It reports false after answering.
+func checkImages(w http.ResponseWriter, data []byte, cf, bg *stagedFile, existing *Chart) (keep, ok bool) {
+	invalid := func(code, message, expected, actual string) {
+		issue := &tja.Issue{Code: code, Message: message, Expected: expected, Actual: actual}
+		respond(w, 422, map[string]any{"code": issue.Code, "message": issue.Message, "errors": []*tja.Issue{issue}, "requestId": w.Header().Get("X-Request-ID"), "validationVersion": tja.Version})
+	}
+	if declared := tja.HeaderFile(tja.SongHeader(data, "PREIMAGE")); cf != nil && declared != "" && norm.NFC.String(declared) != norm.NFC.String(cf.name) {
+		invalid("TJA_PREIMAGE_MISMATCH", fmt.Sprintf("PREIMAGE 引用了「%s」，但你选择的封面是「%s」。请选择对应图片，或修改 TJA 的 PREIMAGE 后重新选择。", declared, cf.name), declared, cf.name)
+		return false, false
+	}
+	switch declared := tja.HeaderFile(tja.SongHeader(data, "BGIMAGE")); {
+	case declared == "" && bg != nil:
+		problem(w, 400, "UPLOAD_FILES_INVALID", "TJA 没有声明 BGIMAGE，不能上传背景图片")
+		return false, false
+	case bg != nil && norm.NFC.String(declared) != norm.NFC.String(bg.name):
+		invalid("TJA_BGIMAGE_MISMATCH", fmt.Sprintf("BGIMAGE 引用了「%s」，但你选择的背景图片是「%s」。请选择对应图片，或修改 TJA 的 BGIMAGE 后重新选择。", declared, bg.name), declared, bg.name)
+		return false, false
+	case declared != "" && bg == nil:
+		return existing != nil && existing.BackgroundHash != "", true
+	}
+	return false, true
+}
+
 // reservePending takes a place in the bounded queue of accepted uploads.
 func reservePending(w http.ResponseWriter, s *Server) bool {
 	select {
@@ -378,11 +409,12 @@ func encodeCover(w http.ResponseWriter, r *http.Request, name string, data []byt
 
 // storeImage stores an encoded WebP cover and returns its file ID.
 func (s *Server) storeImage(ctx context.Context, tx pgx.Tx, data []byte) (int64, error) {
-	return s.storeImageAs(ctx, tx, data, "webp", "image/webp")
+	return s.storeImageAs(ctx, tx, "cover", data, "webp", "image/webp")
 }
 
-// storeImageAs stores image bytes as cover.{extension} and returns the file ID.
-func (s *Server) storeImageAs(ctx context.Context, tx pgx.Tx, data []byte, extension, media string) (int64, error) {
+// storeImageAs stores image bytes as {kind}.{extension} (kind: cover, bgimage) and returns the
+// file ID.
+func (s *Server) storeImageAs(ctx context.Context, tx pgx.Tx, kind string, data []byte, extension, media string) (int64, error) {
 	tmp, e := os.CreateTemp(s.Config.Storage, "cover-*."+extension)
 	if e != nil {
 		return 0, e
@@ -392,7 +424,7 @@ func (s *Server) storeImageAs(ctx context.Context, tx pgx.Tx, data []byte, exten
 	if e = errors.Join(e, tmp.Close()); e != nil {
 		return 0, e
 	}
-	return s.storeFile(ctx, tx, tmp.Name(), "cover."+extension, extension, media, hash(string(data)), int64(len(data)))
+	return s.storeFile(ctx, tx, tmp.Name(), kind+"."+extension, extension, media, hash(string(data)), int64(len(data)))
 }
 
 // managed loads a published chart the signed-in user may edit.
@@ -474,7 +506,8 @@ func (s *Server) replaceCover(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 	var previous *int64
-	err = tx.QueryRow(ctx, `SELECT cover_file FROM charts c WHERE c.id=$1 AND `+publishedChart+` FOR UPDATE`, c.ID).Scan(&previous)
+	var hasFiles bool
+	err = tx.QueryRow(ctx, `SELECT cover_file,tja_file IS NOT NULL FROM charts c WHERE c.id=$1 AND `+publishedChart+` FOR UPDATE`, c.ID).Scan(&previous, &hasFiles)
 	if errors.Is(err, pgx.ErrNoRows) {
 		problem(w, 404, "CHART_NOT_FOUND", "谱面不存在或已删除")
 		return
@@ -487,6 +520,20 @@ func (s *Server) replaceCover(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		_, err = tx.Exec(ctx, `UPDATE charts SET cover_file=$2 WHERE id=$1`, c.ID, file)
 	}
+	// The stored TJA's PREIMAGE names the cover, as an upload writes it; a song registered
+	// without files has none.
+	var released []int64
+	if err == nil && hasFiles {
+		name := hash(string(encoded)) + ".webp"
+		var tjaFile int64
+		tjaFile, released, err = s.rewriteStoredTJA(ctx, tx, c.ID, func(data []byte) ([]byte, bool) {
+			stored, ok := tja.SetSongHeader(data, "PREIMAGE", name)
+			return stored, ok && tja.SongHeader(stored, "PREIMAGE") == name
+		})
+		if err == nil {
+			_, err = tx.Exec(ctx, `UPDATE charts SET tja_file=$2 WHERE id=$1`, c.ID, tjaFile)
+		}
+	}
 	if err == nil {
 		err = tx.Commit(ctx)
 	}
@@ -495,7 +542,10 @@ func (s *Server) replaceCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if previous != nil && *previous != file {
-		if err = s.releaseFiles(ctx, []int64{*previous}); err != nil {
+		released = append(released, *previous)
+	}
+	if len(released) > 0 {
+		if err = s.releaseFiles(ctx, released); err != nil {
 			log.Printf("replaced cover cleanup pending: %v", err)
 		}
 	}

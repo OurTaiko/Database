@@ -83,7 +83,7 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tf, af, cf, mv := files["tja"], files["audio"], files["cover"], files["movie"]
+	tf, af, cf, mv, bg := files["tja"], files["audio"], files["cover"], files["movie"], files["bgimage"]
 	if tf == nil || (!c.HasFiles && af == nil) {
 		if c.HasFiles {
 			problem(w, 400, "UPLOAD_FILES_INVALID", "必须选择新的 TJA，音频可沿用当前文件")
@@ -144,19 +144,24 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	keepBackground, ok := checkImages(w, data, cf, bg, &c)
+	if !ok {
+		return
+	}
 	if !reservePending(w, s) {
 		return
 	}
 	// Hashes only what was sent, so a retry is answered before the files are judged again.
 	parts := []string{"replace", c.ID, tf.name, tf.sha, fields["description"], fields["categoryIds"], fields["nijiiroId"], fields["officialId"], fields["keepTitles"], fields["demoStart"], fields["demoEnd"], fields["difficultyMakers"]}
-	for _, f := range []*stagedFile{af, cf, mv} {
+	for _, f := range []*stagedFile{af, cf, mv, bg} {
 		if f != nil {
 			parts = append(parts, f.name, f.sha)
 		}
 	}
 	job := &uploadJob{
 		user: u.User.ID, key: key, dir: dir, existingID: c.ID, audioHash: c.AudioHash, movieHash: c.MovieHash,
-		tja: tf, audio: af, cover: cf, movie: mv, normalized: data, meta: meta,
+		coverHash: c.CoverHash, backgroundHash: c.BackgroundHash, keepBackground: keepBackground,
+		tja: tf, audio: af, cover: cf, background: bg, movie: mv, normalized: data, meta: meta,
 		description: description, flags: flags, nijiiroID: nijiiroID, officialID: officialID, fields: fields,
 		keepMovie: keepMovie, keepTitles: fields["keepTitles"] == "true",
 		async: strings.Contains(strings.ToLower(r.Header.Get("Prefer")), "respond-async"), done: make(chan uploadResult, 1),

@@ -61,6 +61,10 @@ type Chart struct {
 	MovieHash string `json:"movieHash,omitempty"`
 	MovieSize int64  `json:"movieSize,omitempty"`
 	MovieKey  string `json:"-"`
+	// Background image (BGIMAGE), stored as WebP; empty when the chart has none.
+	BackgroundHash string `json:"bgimageHash,omitempty"`
+	BackgroundSize int64  `json:"bgimageSize,omitempty"`
+	BackgroundKey  string `json:"-"`
 	// FailedFiles names the optional files an upload left out (cover, movie), in its reply only.
 	FailedFiles []fileFailure `json:"failedFiles,omitempty"`
 	tja.Metadata
@@ -80,9 +84,10 @@ const chartSelect = `SELECT c.id,c.number_id,c.nijiiro_id,c.official_id,c.owner_
    ORDER BY array_position(ARRAY['Easy','Normal','Hard','Oni','Edit'],d.course),array_position(ARRAY['single','p1','p2'],d.side)),'[]'::jsonb)
    FROM chart_difficulties d WHERE d.chart_id=c.id),
  COALESCE((SELECT upvotes FROM chart_stats WHERE chart_id=c.id),0),COALESCE((SELECT downvotes FROM chart_stats WHERE chart_id=c.id),0),COALESCE((SELECT comment_count FROM chart_stats WHERE chart_id=c.id),0),
- c.movie_offset,COALESCE(mf.sha256,''),COALESCE(mf.byte_size,0),COALESCE(mf.storage_key,'')
+ c.movie_offset,COALESCE(mf.sha256,''),COALESCE(mf.byte_size,0),COALESCE(mf.storage_key,''),
+ COALESCE(bf.sha256,''),COALESCE(bf.byte_size,0),COALESCE(bf.storage_key,'')
  FROM charts c LEFT JOIN chart_resources tf ON tf.id=c.tja_file LEFT JOIN chart_resources af ON af.id=c.audio_file LEFT JOIN chart_resources cf ON cf.id=c.cover_file
- LEFT JOIN chart_resources mf ON mf.id=c.movie_file `
+ LEFT JOIN chart_resources mf ON mf.id=c.movie_file LEFT JOIN chart_resources bf ON bf.id=c.bgimage_file `
 
 func readChart(row pgx.Row) (Chart, error) {
 	var c Chart
@@ -91,7 +96,8 @@ func readChart(row pgx.Row) (Chart, error) {
 	e := row.Scan(&c.ID, &c.NumberID, &c.NijiiroID, &c.OfficialID, &c.OwnerIDs, &c.Description, &c.CreatedAt, &c.UpdateAt, &c.Duration, &c.DemoEnd, &flags,
 		&c.TJAName, &c.AudioName, &c.TJAHash, &c.TJASize, &c.AudioHash, &c.AudioSize, &c.TJAKey, &c.AudioKey, &c.CoverHash, &c.CoverKey,
 		&c.Title, &c.Subtitle, &c.BPM, &c.Offset, &c.DemoStart, &c.Wave, &c.TitleTranslations, &c.SubtitleTranslations, &difficulties,
-		&c.Upvotes, &c.Downvotes, &c.CommentCount, &c.MovieOffset, &c.MovieHash, &c.MovieSize, &c.MovieKey)
+		&c.Upvotes, &c.Downvotes, &c.CommentCount, &c.MovieOffset, &c.MovieHash, &c.MovieSize, &c.MovieKey,
+		&c.BackgroundHash, &c.BackgroundSize, &c.BackgroundKey)
 	if e == nil {
 		c.OwnerID = c.OwnerIDs[0]
 		c.Score = c.Upvotes - c.Downvotes
@@ -466,7 +472,7 @@ func (s *Server) deleteChart(ctx context.Context, id string) ([]int64, error) {
 	}
 	defer tx.Rollback(ctx)
 	var files []*int64
-	if e = tx.QueryRow(ctx, `SELECT ARRAY[tja_file,audio_file,cover_file,preview_file,movie_file] FROM charts WHERE id=$1 FOR UPDATE`, id).Scan(&files); e != nil {
+	if e = tx.QueryRow(ctx, `SELECT ARRAY[tja_file,audio_file,cover_file,preview_file,movie_file,bgimage_file] FROM charts WHERE id=$1 FOR UPDATE`, id).Scan(&files); e != nil {
 		return nil, e
 	}
 	if _, e = tx.Exec(ctx, `DELETE FROM scores WHERE difficulty_id IN (SELECT id FROM chart_difficulties WHERE chart_id=$1)`, id); e != nil {

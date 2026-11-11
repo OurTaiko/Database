@@ -280,6 +280,12 @@ func (s *Server) resourceLinks(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if c.BackgroundKey != "" {
+		if resources["bgimage"], e = link(c.BackgroundKey, "bgimage", c.BackgroundHash, "image/webp", c.BackgroundSize); e != nil {
+			internal(w, e)
+			return
+		}
+	}
 	// The cover too, as Fanmade lists it: the website's chart package carries it.
 	var coverKey, coverHash string
 	var coverSize int64
