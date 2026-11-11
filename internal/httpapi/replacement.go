@@ -119,6 +119,9 @@ func (s *Server) replaceFiles(w http.ResponseWriter, r *http.Request) {
 			problem(w, 422, "IDENTIFIER_INVALID", "Nijiiro ID 必须为正整数")
 			return
 		}
+		if !s.nijiiroFree(w, r, nijiiroID, c.ID) {
+			return
+		}
 	}
 	if _, sentOfficial := fields["officialId"]; sentOfficial {
 		if _, officialID, ok = identifiers("", fields["officialId"]); !ok {

@@ -14,6 +14,12 @@ import { useNotification } from '@sitekit/notification-context'
 import type { Chart, Locale } from './api/types'
 import { CategoryPicker } from '@sitekit/categories'
 import { cn } from '@sitekit/lib/utils'
+import {
+  NijiiroIdField,
+  nijiiroIdBlocks,
+  parseNijiiroId,
+  useNijiiroIdCheck,
+} from '@sitekit/nijiiro-id'
 import { Modal } from '@sitekit/notifications'
 
 const locales: Locale[] = ['ja', 'en', 'zh', 'ko']
@@ -24,12 +30,6 @@ const localeNames: Record<Locale, string> = {
   ko: '한국어',
 }
 
-/** Reads the identifier fields; `undefined` means the Nijiiro ID is invalid. */
-export function parseNijiiroId(value: string): number | null | undefined {
-  const text = value.trim()
-  if (!text) return null
-  return /^[1-9][0-9]{0,8}$/.test(text) ? Number(text) : undefined
-}
 export const officialIdPattern = /^[A-Za-z0-9_.-]{1,64}$/
 /** Reads an optional BPM; `undefined` means invalid, `null` unknown. */
 export function parseBpm(value: string): number | null | undefined {
@@ -60,6 +60,7 @@ export function EditMetadata({
   const [subtitle, setSubtitle] = useState(chart.subtitle)
   const [bpm, setBpm] = useState(chart.bpm > 0 ? String(chart.bpm) : '')
   const [nijiiroId, setNijiiroId] = useState(chart.nijiiroId?.toString() ?? '')
+  const nijiiroCheck = useNijiiroIdCheck(nijiiroId, chart.id)
   const [officialId, setOfficialId] = useState(chart.officialId ?? '')
   const [categoryIds, setCategoryIds] = useState(chart.categoryIds)
   const [description, setDescription] = useState(chart.description)
@@ -78,6 +79,10 @@ export function EditMetadata({
     const official = officialId.trim()
     if (nijiiro === undefined || (official && !officialIdPattern.test(official))) {
       setError(t('db.identifierInvalid'))
+      return
+    }
+    if (nijiiroIdBlocks(nijiiroCheck)) {
+      setError(t('errors.NIJIIRO_ID_TAKEN'))
       return
     }
     const parsedBpm = parseBpm(bpm)
@@ -198,16 +203,13 @@ export function EditMetadata({
           )}
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="edit-nijiiro-id">{t('messages.nijiiroId')}</Label>
-            <Input
-              id="edit-nijiiro-id"
-              inputMode="numeric"
-              value={nijiiroId}
-              disabled={busy}
-              onChange={(e) => setNijiiroId(e.target.value)}
-            />
-          </div>
+          <NijiiroIdField
+            id="edit-nijiiro-id"
+            value={nijiiroId}
+            check={nijiiroCheck}
+            disabled={busy}
+            onChange={setNijiiroId}
+          />
           <div className="space-y-2">
             <Label htmlFor="edit-official-id">{t('messages.officialId')}</Label>
             <Input

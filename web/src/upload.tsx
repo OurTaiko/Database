@@ -48,7 +48,13 @@ import {
   TableHeader,
   TableRow,
 } from '@sitekit/components/ui/table'
-import { officialIdPattern, parseBpm, parseNijiiroId } from './edit-metadata'
+import { officialIdPattern, parseBpm } from './edit-metadata'
+import {
+  NijiiroIdField,
+  nijiiroIdBlocks,
+  parseNijiiroId,
+  useNijiiroIdCheck,
+} from '@sitekit/nijiiro-id'
 import { audioDiffers, replacementFields, reviewReplacement } from '@sitekit/replacement-diff'
 import type { Proposal, ReplacementPreview, Review } from '@sitekit/replacement-diff'
 import { ReplacementReview } from '@sitekit/replacement-review'
@@ -130,6 +136,7 @@ export function UploadPage({
       existing?.nijiiroId != null ? String(existing.nijiiroId) : '',
     ),
     [officialId, setOfficialId] = useState(existing?.officialId ?? '')
+  const nijiiroCheck = useNijiiroIdCheck(nijiiroId, existing?.id)
   const [categoryIds, setCategoryIds] = useState<string[]>(existing?.categoryIds ?? [])
   const [description, setDescription] = useState(existing?.description ?? ''),
     [busy, setBusy] = useState(false),
@@ -289,6 +296,10 @@ export function UploadPage({
       (official && !officialIdPattern.test(official))
     ) {
       notify(t('db.identifierInvalid'), 'error')
+      return
+    }
+    if (nijiiroIdBlocks(nijiiroCheck)) {
+      notify(t('errors.NIJIIRO_ID_TAKEN'), 'error')
       return
     }
     if (mode === 'song' && parseBpm(bpm) === undefined) {
@@ -768,16 +779,13 @@ export function UploadPage({
           <Card className="min-w-0 gap-5 border-[1.5px] border-border p-5 shadow-none sm:p-6">
             <h2 className="text-base font-extrabold">{t('db.record')}</h2>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="upload-nijiiro-id">{t('messages.nijiiroId')}</Label>
-                <Input
-                  id="upload-nijiiro-id"
-                  inputMode="numeric"
-                  value={nijiiroId}
-                  disabled={busy}
-                  onChange={(e) => setNijiiroId(e.target.value)}
-                />
-              </div>
+              <NijiiroIdField
+                id="upload-nijiiro-id"
+                value={nijiiroId}
+                check={nijiiroCheck}
+                disabled={busy}
+                onChange={setNijiiroId}
+              />
               <div className="space-y-2">
                 <Label htmlFor="upload-official-id">{t('messages.officialId')}</Label>
                 <Input

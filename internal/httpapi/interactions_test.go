@@ -44,8 +44,8 @@ func interactionFixture(t *testing.T) interactionWorld {
 	return w
 }
 
-// GET /charts/{id}: by=number finds the chart's number, by=id its ID; without by the form
-// decides (R051).
+// GET /charts/{id}: by=number finds the chart's number, by=id its ID, by=nijiiro its Nijiiro
+// ID; without by the form decides between the first two (R051).
 func TestChartDetailBy(t *testing.T) {
 	w := interactionFixture(t)
 	var byID Chart
@@ -78,6 +78,44 @@ func TestChartDetailBy(t *testing.T) {
 	w.c.do("", "GET", w.chart(w.other)+"?by=id", "", &other)
 	if other.NumberID != byID.NumberID+1 {
 		t.Fatal("numbers", byID.NumberID, other.NumberID)
+	}
+	// by=nijiiro reads {id} as the Nijiiro ID, which is another number than the chart's own:
+	// Other takes Song's number as its Nijiiro ID.
+	if _, e := w.s.DB.Exec(context.Background(), `UPDATE charts SET nijiiro_id=$2 WHERE id=$1`, w.other, byID.NumberID); e != nil {
+		t.Fatal(e)
+	}
+	var mapped Chart
+	if code := w.c.do("", "GET", number+"?by=nijiiro", "", &mapped); code != 200 || mapped.ID != w.other {
+		t.Fatal("by=nijiiro", code, mapped.ID)
+	}
+	for path, want := range map[string]int{
+		w.chart("99999999") + "?by=nijiiro":    404,
+		w.chart("0") + "?by=nijiiro":           404,
+		w.chart("01") + "?by=nijiiro":          404,
+		w.chart("99999999999") + "?by=nijiiro": 404, // past int4
+		w.chart(w.other) + "?by=nijiiro":       404,
+	} {
+		if code := w.c.do("", "GET", path, "", nil); code != want {
+			t.Fatal(path, code, "want", want)
+		}
+	}
+	// A Nijiiro ID names one chart (027): the index refuses a second, and so does the edit.
+	if _, e := w.s.DB.Exec(context.Background(), `UPDATE charts SET nijiiro_id=$2 WHERE id=$1`, w.song, byID.NumberID); !nijiiroConflict(e) {
+		t.Fatal("shared Nijiiro ID", e)
+	}
+	taken := `{"nijiiroId":` + strconv.FormatInt(byID.NumberID, 10) + `}`
+	if code := w.c.do("owner", "PATCH", w.chart(w.song), taken, nil); code != 409 {
+		t.Fatal("taken Nijiiro ID", code)
+	}
+	// Its own chart keeps it, and a cleared one is free again.
+	if code := w.c.do("owner", "PATCH", w.chart(w.other), taken, nil); code != 200 {
+		t.Fatal("own Nijiiro ID", code)
+	}
+	if code := w.c.do("owner", "PATCH", w.chart(w.other), `{"nijiiroId":null}`, nil); code != 200 {
+		t.Fatal("clear Nijiiro ID", code)
+	}
+	if code := w.c.do("owner", "PATCH", w.chart(w.song), taken, &mapped); code != 200 || mapped.NijiiroID == nil || int64(*mapped.NijiiroID) != byID.NumberID {
+		t.Fatal("freed Nijiiro ID", code)
 	}
 }
 

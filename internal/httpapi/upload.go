@@ -239,6 +239,9 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		problem(w, 422, "IDENTIFIER_INVALID", "Nijiiro ID 必须为正整数；官方 ID 只能包含字母、数字、点、下划线和连字符，最长 64 个字符")
 		return
 	}
+	if !s.nijiiroFree(w, r, nijiiroID, "") {
+		return
+	}
 	description := fields["description"]
 	if !validDescription(description) {
 		problem(w, 422, "DESCRIPTION_INVALID", "说明包含无效字符")
@@ -686,6 +689,9 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 			}
 			nijiiroID = &n
 		}
+		if !s.nijiiroFree(w, r, nijiiroID, c.ID) {
+			return
+		}
 	}
 	if len(patch.OfficialID) > 0 {
 		officialID = nil
@@ -753,6 +759,10 @@ func (s *Server) editMetadata(w http.ResponseWriter, r *http.Request) {
 	// update_at is refreshed by the charts trigger only when something changed.
 	tag, e := tx.Exec(r.Context(), `UPDATE charts c SET description=$2,category_flags=$3,nijiiro_id=$4,official_id=$5,title_translations=$6,subtitle_translations=$7,title=$8,subtitle=$9,bpm=$10,demo_start=$11,demo_end=$12 WHERE c.id=$1 AND `+publishedChart,
 		c.ID, description, flags, nijiiroID, officialID, titles, subtitles, title, subtitle, bpm, demoStart, demoEnd)
+	if nijiiroConflict(e) {
+		problem(w, 409, "NIJIIRO_ID_TAKEN", nijiiroTakenMessage)
+		return
+	}
 	if e != nil {
 		internal(w, e)
 		return

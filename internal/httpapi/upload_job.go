@@ -309,6 +309,9 @@ func (s *Server) processUpload(ctx context.Context, j *uploadJob) uploadResult {
  VALUES($20,$1,$2,ARRAY[$3::text],$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$21)`,
 			j.nijiiroID, j.officialID, j.user, tjaFile, audioFile, coverFile, j.description, j.meta.Title, j.meta.Subtitle, j.meta.BPM, j.meta.Offset, demoStart, duration, titles, subtitles, j.flags, demoEnd, movieFile, j.meta.MovieOffset, id, backgroundFile)
 	}
+	if nijiiroConflict(err) {
+		return rejected(409, "NIJIIRO_ID_TAKEN", nijiiroTakenMessage)
+	}
 	if err != nil {
 		return failed(err)
 	}
