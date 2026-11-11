@@ -83,6 +83,10 @@ func (s *Server) gameLogin(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, result)
 }
 
+// catalogGenreFrame is the game's bar_genre frame (0-12) for this site's own
+// song-select folder: Database's is the orange 4.
+const catalogGenreFrame = 4
+
 // gameCatalog is the complete song list for a game client: the categories,
 // every published chart with files in at least one, and the system playlists, read in
 // one snapshot. It is the same for everyone and ignores any session; an
@@ -129,6 +133,7 @@ func (s *Server) gameCatalog(w http.ResponseWriter, r *http.Request) {
 	body := map[string]any{
 		"categories": categories, "charts": charts, "chartCount": len(charts), "playlists": playlists, "playlistVersion": 1,
 		"chartSlotVersion": 1, "resourceDownloadVersion": 1, "scoreReplayVersion": 1, "danVersion": 1, "danResultsVersion": 1,
+		"genreFrame": catalogGenreFrame,
 	}
 	if s.Config.SSO != nil {
 		body["sso"] = s.Config.SSO.GameAccounts()
